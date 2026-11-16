@@ -65,8 +65,18 @@ class GoogleDriveLinkParserTest {
     }
 
     @Test
-    fun `returns invalid for non-drive urls`() {
-        val result = GoogleDriveLinkParser.parseSingle("https://example.com/audio.mp3")
+    fun `parses direct https audio url`() {
+        val url = "https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/001.mp3"
+        val result = GoogleDriveLinkParser.parseSingle(url)
+        assertTrue(result is DriveUrlParseResult.File)
+        val file = (result as DriveUrlParseResult.File).parsed
+        assertEquals(url, file.streamUrl)
+        assertEquals("001", file.suggestedTitle)
+    }
+
+    @Test
+    fun `returns invalid for non-url text`() {
+        val result = GoogleDriveLinkParser.parseSingle("bukan link audio")
         assertTrue(result is DriveUrlParseResult.Invalid)
     }
 

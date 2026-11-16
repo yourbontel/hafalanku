@@ -71,8 +71,25 @@ object GoogleDriveLinkParser {
             )
         }
 
+        if (trimmed.startsWith("https://", ignoreCase = true) ||
+            trimmed.startsWith("http://", ignoreCase = true)
+        ) {
+            val cleanName = trimmed.substringAfterLast('/')
+                .substringBefore('?')
+                .substringBeforeLast('.')
+                .takeIf { it.isNotBlank() }
+            return DriveUrlParseResult.File(
+                ParsedDriveFile(
+                    fileId = "direct_${trimmed.hashCode().toUInt()}",
+                    originalUrl = trimmed,
+                    streamUrl = trimmed,
+                    suggestedTitle = suggestedTitle ?: cleanName
+                )
+            )
+        }
+
         return DriveUrlParseResult.Invalid(
-            "Link tidak dikenali sebagai link file atau folder Google Drive."
+            "Link tidak dikenali sebagai URL audio atau link Google Drive yang valid."
         )
     }
 

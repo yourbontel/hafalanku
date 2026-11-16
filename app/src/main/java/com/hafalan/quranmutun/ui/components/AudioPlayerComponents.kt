@@ -211,8 +211,15 @@ fun FullAudioPlayerSheet(
                 shape = RoundedCornerShape(999.dp),
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
+                val sourceLabel = if (audio.driveFileId.startsWith("quranicaudio_")) {
+                    "QuranicAudio"
+                } else if (audio.driveFileId.startsWith("direct_")) {
+                    "Audio Streaming"
+                } else {
+                    "Google Drive"
+                }
                 Text(
-                    text = "${audio.targetType.labelId} • Google Drive",
+                    text = "${audio.targetType.labelId} • $sourceLabel",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)

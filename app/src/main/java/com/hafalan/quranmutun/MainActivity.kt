@@ -50,7 +50,7 @@ import com.hafalan.quranmutun.ui.viewmodel.MainViewModel
 private enum class AppTab(val label: String, val title: String, val icon: ImageVector) {
     LISTEN("Dengarkan", "Muraja'ah Berurutan", Icons.Rounded.Headphones),
     TARGET("Hafalan Saya", "Target Hafalan & Mutun", Icons.Rounded.MenuBook),
-    LIBRARY("Pustaka Drive", "Pustaka Google Drive", Icons.Rounded.CloudQueue)
+    LIBRARY("Pustaka Audio", "Pustaka Audio", Icons.Rounded.CloudQueue)
 }
 
 private data class AddAudioDialogConfig(

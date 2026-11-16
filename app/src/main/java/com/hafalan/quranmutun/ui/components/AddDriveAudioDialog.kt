@@ -78,7 +78,7 @@ fun AddDriveAudioDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isFetchingFolder) onDismiss() },
-        title = { Text("Tambah Audio Google Drive") },
+        title = { Text("Tambah Audio Muraja'ah") },
         text = {
             Column(
                 modifier = Modifier
@@ -87,8 +87,7 @@ fun AddDriveAudioDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Pastikan akses file/folder di Google Drive sudah diset ke \"Siapa saja yang memiliki link\".\n" +
-                        "Anda bisa menempel 1 link file, link folder publik, atau banyak link (1 baris = 1 link atau format: Judul | Link).",
+                    text = "Anda bisa menempelkan link MP3/M4A langsung (https://...) atau link file/folder Google Drive (pastikan akses diset 'Siapa saja yang memiliki link').",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -96,8 +95,8 @@ fun AddDriveAudioDialog(
                 OutlinedTextField(
                     value = linkInput,
                     onValueChange = { linkInput = it },
-                    label = { Text("Link File / Folder Google Drive *") },
-                    placeholder = { Text("https://drive.google.com/file/d/.../view") },
+                    label = { Text("Link Audio MP3 / Google Drive *") },
+                    placeholder = { Text("https://.../audio.mp3 atau link Drive") },
                     minLines = 2,
                     maxLines = 5,
                     modifier = Modifier.fillMaxWidth()

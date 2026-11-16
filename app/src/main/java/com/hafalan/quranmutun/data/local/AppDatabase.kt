@@ -8,6 +8,7 @@ import androidx.room.TypeConverters
 import androidx.room.withTransaction
 import com.hafalan.quranmutun.data.seed.MutunSeedCatalog
 import com.hafalan.quranmutun.data.seed.QuranCatalog
+import com.hafalan.quranmutun.data.seed.QuranicAudioCatalog
 
 @Database(
     entities = [
@@ -40,6 +41,9 @@ abstract class AppDatabase : RoomDatabase() {
                         mutunDao().insertSections(sections)
                     }
                 }
+            }
+            if (driveAudioDao().countQuranicAudio5() == 0) {
+                driveAudioDao().insertAll(QuranicAudioCatalog.qari5Entries())
             }
         }
     }

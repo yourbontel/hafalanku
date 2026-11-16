@@ -70,6 +70,9 @@ interface DriveAudioDao {
     @Query("SELECT * FROM drive_audios")
     suspend fun getAllOnce(): List<DriveAudioEntity>
 
+    @Query("SELECT COUNT(*) FROM drive_audios WHERE driveFileId LIKE 'quranicaudio_5_%'")
+    suspend fun countQuranicAudio5(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(audio: DriveAudioEntity): Long
 

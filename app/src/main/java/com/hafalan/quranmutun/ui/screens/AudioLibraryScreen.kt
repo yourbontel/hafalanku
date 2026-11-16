@@ -149,14 +149,13 @@ fun AudioLibraryScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Cara Memakai Audio dari Google Drive",
+                                text = "Sumber Audio Al-Qur'an & Mutun",
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "1. Di Google Drive, pilih file/folder audio → Bagikan (Share).\n" +
-                                    "2. Ubah akses menjadi \"Siapa saja yang memiliki link\".\n" +
-                                    "3. Salin link-nya lalu tempel lewat tombol \"+ Link\" di atas.",
+                                text = "• Al-Qur'an (114 Surah) sudah otomatis terisi dari QuranicAudio (Mishari Rashid al-'Afasy).\n" +
+                                    "• Untuk Mutun atau audio tambahan, ketuk \"+ Link\" dan tempel link MP3 langsung atau link Google Drive.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
