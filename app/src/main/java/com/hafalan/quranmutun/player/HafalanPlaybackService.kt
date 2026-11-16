@@ -136,6 +136,8 @@ class HafalanPlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        val app = application as HafalanApp
+        app.audioPlayerManager.persistCurrentPositionNow()
         val player = exoPlayer
         if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
             stopSelf()
@@ -144,6 +146,7 @@ class HafalanPlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         val app = application as HafalanApp
+        app.audioPlayerManager.persistCurrentPositionNow()
         app.audioPlayerManager.detachServicePlayer()
         mediaSession?.release()
         mediaSession = null

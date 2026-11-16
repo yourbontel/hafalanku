@@ -21,6 +21,9 @@ class HafalanApp : Application() {
         AudioPlayerManager(
             context = this,
             completedAudioIdsProvider = { userPreferences.state.value.completedAudioIds },
+            savedPositionProvider = { audioId -> userPreferences.getSavedPositionMs(audioId) },
+            onSavePosition = { audioId, posMs -> userPreferences.saveAudioPosition(audioId, posMs) },
+            onClearPosition = { audioId -> userPreferences.clearAudioPosition(audioId) },
             onAudioPlayFinished = { audioId ->
                 userPreferences.incrementAudioPlayCount(audioId)
             },

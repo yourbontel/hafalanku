@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -99,6 +100,22 @@ class MainViewModel(
         playerManager.setAutoAdvancePlaylist(userPreferences.state.value.autoAdvancePlaylist)
         viewModelScope.launch {
             repository.initialize()
+            val prefs = userPreferences.state.value
+            val lastId = prefs.lastActiveAudioId
+            if (lastId != null) {
+                val allAudios = repository.observeAudios().first()
+                val lastAudio = allAudios.find { it.id == lastId }
+                if (lastAudio != null) {
+                    val playlist = SequentialLockPolicy.orderedPlaylistForCategory(
+                        allAudios = allAudios,
+                        targetType = lastAudio.targetType,
+                        minHafalanSurah = prefs.minHafalanSurah,
+                        maxHafalanSurah = prefs.maxHafalanSurah
+                    ).ifEmpty { listOf(lastAudio) }
+                    val savedPos = userPreferences.getSavedPositionMs(lastId)
+                    playerManager.restorePausedSessionIfIdle(lastAudio, playlist, savedPos)
+                }
+            }
             _isInitialized.value = true
         }
     }
@@ -439,9 +456,14 @@ class MainViewModel(
             if (playerManager.state.value.currentAudio?.id == audio.id) {
                 playerManager.stopAndDismiss()
             }
+            userPreferences.clearLastActiveAudioIfMatches(audio.id)
             repository.deleteAudio(audio)
             _toastMessage.tryEmit("Audio dihapus")
         }
+    }
+
+    fun persistPlaybackPosition() {
+        playerManager.persistCurrentPositionNow()
     }
 
     fun playAudio(audio: DriveAudioEntity, playlistHint: List<DriveAudioEntity> = uiState.value.audios) {

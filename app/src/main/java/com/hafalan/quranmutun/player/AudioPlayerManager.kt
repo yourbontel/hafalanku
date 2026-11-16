@@ -44,6 +44,9 @@ data class AudioPlayerState(
 class AudioPlayerManager(
     context: Context,
     private val completedAudioIdsProvider: () -> Set<Long>,
+    private val savedPositionProvider: (Long) -> Long,
+    private val onSavePosition: (Long, Long) -> Unit,
+    private val onClearPosition: (Long) -> Unit,
     private val onAudioPlayFinished: (Long) -> Unit,
     private val onAudioSequenceCompleted: (DriveAudioEntity) -> Unit
 ) {
@@ -55,6 +58,8 @@ class AudioPlayerManager(
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
     private var pendingPlayRequest: Boolean = false
+    private var pendingStartPositionMs: Long = 0L
+    private var tickerSaveCounter: Int = 0
 
     private val _state = MutableStateFlow(AudioPlayerState())
     val state: StateFlow<AudioPlayerState> = _state.asStateFlow()
@@ -66,6 +71,7 @@ class AudioPlayerManager(
                 startPositionTicker()
             } else {
                 stopPositionTicker()
+                persistCurrentPositionNow()
             }
         }
 
@@ -103,6 +109,7 @@ class AudioPlayerManager(
                 _state.value.loopMode == LoopMode.INFINITE
             ) {
                 val currentAudio = _state.value.currentAudio ?: return
+                onClearPosition(currentAudio.id)
                 onAudioPlayFinished(currentAudio.id)
                 onAudioSequenceCompleted(currentAudio)
                 _state.update { it.copy(currentLoopIteration = it.currentLoopIteration + 1) }
@@ -110,6 +117,7 @@ class AudioPlayerManager(
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            persistCurrentPositionNow()
             _state.update {
                 it.copy(
                     isPlaying = false,
@@ -127,16 +135,52 @@ class AudioPlayerManager(
         player.addListener(playerListener)
         if (pendingPlayRequest) {
             pendingPlayRequest = false
+            val startMs = pendingStartPositionMs
+            pendingStartPositionMs = 0L
             _state.value.currentAudio?.let { audio ->
-                loadAndPlayOnAttachedPlayer(player, audio)
+                loadAndPlayOnAttachedPlayer(player, audio, startMs)
             }
         }
     }
 
     internal fun detachServicePlayer() {
+        persistCurrentPositionNow()
         stopPositionTicker()
         exoPlayer?.removeListener(playerListener)
         exoPlayer = null
+    }
+
+    fun persistCurrentPositionNow() {
+        val audio = _state.value.currentAudio ?: return
+        val player = exoPlayer
+        val pos = if (player != null && player.playbackState != Player.STATE_ENDED) {
+            player.currentPosition.coerceAtLeast(0L)
+        } else {
+            _state.value.positionMs.coerceAtLeast(0L)
+        }
+        if (pos > 0L) {
+            onSavePosition(audio.id, pos)
+        }
+    }
+
+    fun restorePausedSessionIfIdle(
+        audio: DriveAudioEntity,
+        playlist: List<DriveAudioEntity>,
+        savedPositionMs: Long
+    ) {
+        if (_state.value.currentAudio != null || exoPlayer != null) return
+        _state.update {
+            it.copy(
+                currentAudio = audio,
+                playlist = playlist,
+                isPlaying = false,
+                isBuffering = false,
+                positionMs = savedPositionMs.coerceAtLeast(0L),
+                durationMs = 0L,
+                currentLoopIteration = 1,
+                errorMessage = null
+            )
+        }
     }
 
     private fun ensureServiceConnected() {
@@ -165,31 +209,46 @@ class AudioPlayerManager(
             }
             return
         }
+        if (current != null && current.id != audio.id) {
+            persistCurrentPositionNow()
+        }
         startNewTrack(audio, playlist)
     }
 
     private fun startNewTrack(audio: DriveAudioEntity, playlist: List<DriveAudioEntity>) {
+        val resumeMs = savedPositionProvider(audio.id).coerceAtLeast(0L)
         _state.update {
             it.copy(
                 currentAudio = audio,
                 playlist = playlist,
                 isBuffering = true,
-                positionMs = 0L,
+                positionMs = resumeMs,
                 durationMs = 0L,
                 currentLoopIteration = 1,
                 errorMessage = null
             )
         }
+        if (resumeMs > 0L) {
+            onSavePosition(audio.id, resumeMs)
+        } else {
+            onSavePosition(audio.id, 0L)
+        }
+
         ensureServiceConnected()
         val player = exoPlayer
         if (player != null) {
-            loadAndPlayOnAttachedPlayer(player, audio)
+            loadAndPlayOnAttachedPlayer(player, audio, resumeMs)
         } else {
+            pendingStartPositionMs = resumeMs
             pendingPlayRequest = true
         }
     }
 
-    private fun loadAndPlayOnAttachedPlayer(player: ExoPlayer, audio: DriveAudioEntity) {
+    private fun loadAndPlayOnAttachedPlayer(
+        player: ExoPlayer,
+        audio: DriveAudioEntity,
+        startPositionMs: Long
+    ) {
         applyLoopToExoPlayer(player, _state.value.loopMode)
         player.setPlaybackParameters(PlaybackParameters(_state.value.playbackSpeed))
         val metadata = MediaMetadata.Builder()
@@ -201,7 +260,7 @@ class AudioPlayerManager(
             .setUri(audio.streamUrl)
             .setMediaMetadata(metadata)
             .build()
-        player.setMediaItem(item)
+        player.setMediaItem(item, startPositionMs.coerceAtLeast(0L))
         player.prepare()
         player.playWhenReady = true
     }
@@ -273,6 +332,7 @@ class AudioPlayerManager(
         if (!SequentialLockPolicy.canAdvanceToNext(list, idx, completedAudioIdsProvider())) {
             return false
         }
+        persistCurrentPositionNow()
         startNewTrack(list[idx + 1], list)
         return true
     }
@@ -284,13 +344,16 @@ class AudioPlayerManager(
         if (!SequentialLockPolicy.canGoToPrevious(list, idx, completedAudioIdsProvider())) {
             return false
         }
+        persistCurrentPositionNow()
         startNewTrack(list[idx - 1], list)
         return true
     }
 
     fun stopAndDismiss() {
+        persistCurrentPositionNow()
         stopPositionTicker()
         pendingPlayRequest = false
+        pendingStartPositionMs = 0L
         exoPlayer?.stop()
         exoPlayer?.clearMediaItems()
         _state.update {
@@ -320,6 +383,9 @@ class AudioPlayerManager(
         val currentAudio = snapshot.currentAudio ?: return
         val target = snapshot.loopMode.targetCount
 
+        // Clear saved mid-track position since this audio completed cleanly
+        onClearPosition(currentAudio.id)
+
         // Every full playthrough counts as +1 repetition
         onAudioPlayFinished(currentAudio.id)
 
@@ -336,7 +402,7 @@ class AudioPlayerManager(
         )
         when (action) {
             is LoopNextAction.ReplayCurrent -> {
-                _state.update { it.copy(currentLoopIteration = action.nextIteration) }
+                _state.update { it.copy(currentLoopIteration = action.nextIteration, positionMs = 0L) }
                 player.seekTo(0L)
                 player.play()
             }
@@ -349,7 +415,7 @@ class AudioPlayerManager(
                         isPlaying = false,
                         isBuffering = false,
                         currentLoopIteration = 1,
-                        positionMs = snapshot.durationMs
+                        positionMs = 0L
                     )
                 }
             }
@@ -358,16 +424,25 @@ class AudioPlayerManager(
 
     private fun startPositionTicker() {
         if (positionTickerJob?.isActive == true) return
+        tickerSaveCounter = 0
         positionTickerJob = scope.launch {
             while (isActive) {
                 val player = exoPlayer
                 if (player != null) {
+                    val pos = player.currentPosition.coerceAtLeast(0L)
                     val dur = player.duration.takeIf { it != C.TIME_UNSET } ?: _state.value.durationMs
                     _state.update {
                         it.copy(
-                            positionMs = player.currentPosition.coerceAtLeast(0L),
+                            positionMs = pos,
                             durationMs = dur
                         )
+                    }
+                    tickerSaveCounter++
+                    if (tickerSaveCounter >= 5) {
+                        tickerSaveCounter = 0
+                        _state.value.currentAudio?.let { audio ->
+                            if (pos > 0L) onSavePosition(audio.id, pos)
+                        }
                     }
                 }
                 delay(400L)
@@ -381,6 +456,7 @@ class AudioPlayerManager(
     }
 
     fun release() {
+        persistCurrentPositionNow()
         stopPositionTicker()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null

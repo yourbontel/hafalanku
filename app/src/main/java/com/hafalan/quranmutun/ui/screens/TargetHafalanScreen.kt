@@ -331,9 +331,12 @@ fun TargetHafalanScreen(
                             )
                         }
                         val surahPlayCount = surahAudios.sumOf { prefs.audioPlayCounts[it.id] ?: 0 }
+                        val savedSurahPos = surahAudios.firstOrNull()?.let { prefs.audioPositionsMs[it.id] ?: 0L } ?: 0L
                         Text(
                             text = if (surahAudios.isEmpty()) {
-                                "${surah.totalVerses} ayat • Belum ada audio Drive"
+                                "${surah.totalVerses} ayat • Diulang ${surahPlayCount}x"
+                            } else if (savedSurahPos > 0L) {
+                                "${surahAudios.size} audio • Lanjut ${com.hafalan.quranmutun.ui.components.formatDuration(savedSurahPos)} • Diulang ${surahPlayCount}x"
                             } else {
                                 "${surahAudios.size} audio Drive • Diulang ${surahPlayCount}x"
                             },
@@ -441,9 +444,12 @@ fun TargetHafalanScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         val mutunPlayCount = mutunAudios.sumOf { prefs.audioPlayCounts[it.id] ?: 0 }
+                        val savedMutunPos = mutunAudios.firstOrNull()?.let { prefs.audioPositionsMs[it.id] ?: 0L } ?: 0L
                         Text(
                             text = if (mutunAudios.isEmpty()) {
-                                "${mutun.category} • Belum ada audio Drive"
+                                "${mutun.category} • Diulang ${mutunPlayCount}x"
+                            } else if (savedMutunPos > 0L) {
+                                "${mutun.category} • Lanjut ${com.hafalan.quranmutun.ui.components.formatDuration(savedMutunPos)} • Diulang ${mutunPlayCount}x"
                             } else {
                                 "${mutun.category} • ${mutunAudios.size} audio • Diulang ${mutunPlayCount}x"
                             },

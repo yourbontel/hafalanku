@@ -15,7 +15,9 @@ data class ListeningPreferences(
     val completedAudioIds: Set<Long> = emptySet(),
     val audioPlayCounts: Map<Long, Int> = emptyMap(),
     val quranCycleCount: Int = 0,
-    val mutunCycleCount: Int = 0
+    val mutunCycleCount: Int = 0,
+    val lastActiveAudioId: Long? = null,
+    val audioPositionsMs: Map<Long, Long> = emptyMap()
 )
 
 class UserPreferences(context: Context) {
@@ -30,7 +32,9 @@ class UserPreferences(context: Context) {
         val maxSurah = prefs.getInt(KEY_MAX_SURAH, 9).coerceIn(minSurah, 114)
         val completedRaw = prefs.getStringSet(KEY_COMPLETED_AUDIO_IDS, emptySet()).orEmpty()
         val completedIds = completedRaw.mapNotNull { it.toLongOrNull() }.toSet()
-        val playCounts = decodePlayCounts(prefs.getString(KEY_AUDIO_PLAY_COUNTS, "").orEmpty())
+        val playCounts = decodeIntMap(prefs.getString(KEY_AUDIO_PLAY_COUNTS, "").orEmpty())
+        val positions = decodeLongMap(prefs.getString(KEY_AUDIO_POSITIONS_MS, "").orEmpty())
+        val lastAudioId = prefs.getLong(KEY_LAST_ACTIVE_AUDIO_ID, -1L).takeIf { it > 0L }
         return ListeningPreferences(
             minHafalanSurah = minSurah,
             maxHafalanSurah = maxSurah,
@@ -39,7 +43,9 @@ class UserPreferences(context: Context) {
             completedAudioIds = completedIds,
             audioPlayCounts = playCounts,
             quranCycleCount = prefs.getInt(KEY_QURAN_CYCLE_COUNT, 0).coerceAtLeast(0),
-            mutunCycleCount = prefs.getInt(KEY_MUTUN_CYCLE_COUNT, 0).coerceAtLeast(0)
+            mutunCycleCount = prefs.getInt(KEY_MUTUN_CYCLE_COUNT, 0).coerceAtLeast(0),
+            lastActiveAudioId = lastAudioId,
+            audioPositionsMs = positions
         )
     }
 
@@ -63,10 +69,51 @@ class UserPreferences(context: Context) {
         _state.update { it.copy(keepScreenOnInDrivingMode = enabled) }
     }
 
+    fun saveAudioPosition(audioId: Long, positionMs: Long) {
+        val safePos = positionMs.coerceAtLeast(0L)
+        val currentMap = _state.value.audioPositionsMs.toMutableMap()
+        if (safePos > 0L) {
+            currentMap[audioId] = safePos
+        } else {
+            currentMap.remove(audioId)
+        }
+        prefs.edit()
+            .putLong(KEY_LAST_ACTIVE_AUDIO_ID, audioId)
+            .putString(KEY_AUDIO_POSITIONS_MS, encodeLongMap(currentMap))
+            .apply()
+        _state.update {
+            it.copy(
+                lastActiveAudioId = audioId,
+                audioPositionsMs = currentMap
+            )
+        }
+    }
+
+    fun clearAudioPosition(audioId: Long) {
+        val currentMap = _state.value.audioPositionsMs.toMutableMap()
+        if (currentMap.remove(audioId) != null) {
+            prefs.edit()
+                .putString(KEY_AUDIO_POSITIONS_MS, encodeLongMap(currentMap))
+                .apply()
+            _state.update { it.copy(audioPositionsMs = currentMap) }
+        }
+    }
+
+    fun clearLastActiveAudioIfMatches(audioId: Long) {
+        clearAudioPosition(audioId)
+        if (_state.value.lastActiveAudioId == audioId) {
+            prefs.edit().remove(KEY_LAST_ACTIVE_AUDIO_ID).apply()
+            _state.update { it.copy(lastActiveAudioId = null) }
+        }
+    }
+
+    fun getSavedPositionMs(audioId: Long): Long =
+        _state.value.audioPositionsMs[audioId] ?: 0L
+
     fun incrementAudioPlayCount(audioId: Long) {
         val currentMap = _state.value.audioPlayCounts.toMutableMap()
         currentMap[audioId] = (currentMap[audioId] ?: 0) + 1
-        prefs.edit().putString(KEY_AUDIO_PLAY_COUNTS, encodePlayCounts(currentMap)).apply()
+        prefs.edit().putString(KEY_AUDIO_PLAY_COUNTS, encodeIntMap(currentMap)).apply()
         _state.update { it.copy(audioPlayCounts = currentMap) }
     }
 
@@ -119,10 +166,10 @@ class UserPreferences(context: Context) {
         _state.update { it.copy(completedAudioIds = ids) }
     }
 
-    private fun encodePlayCounts(map: Map<Long, Int>): String =
+    private fun encodeIntMap(map: Map<Long, Int>): String =
         map.entries.joinToString(",") { "${it.key}:${it.value}" }
 
-    private fun decodePlayCounts(raw: String): Map<Long, Int> {
+    private fun decodeIntMap(raw: String): Map<Long, Int> {
         if (raw.isBlank()) return emptyMap()
         return raw.split(",")
             .mapNotNull { entry ->
@@ -131,6 +178,23 @@ class UserPreferences(context: Context) {
                     val id = parts[0].toLongOrNull()
                     val count = parts[1].toIntOrNull()
                     if (id != null && count != null && count > 0) id to count else null
+                } else null
+            }
+            .toMap()
+    }
+
+    private fun encodeLongMap(map: Map<Long, Long>): String =
+        map.entries.joinToString(",") { "${it.key}:${it.value}" }
+
+    private fun decodeLongMap(raw: String): Map<Long, Long> {
+        if (raw.isBlank()) return emptyMap()
+        return raw.split(",")
+            .mapNotNull { entry ->
+                val parts = entry.split(":")
+                if (parts.size == 2) {
+                    val id = parts[0].toLongOrNull()
+                    val value = parts[1].toLongOrNull()
+                    if (id != null && value != null && value > 0L) id to value else null
                 } else null
             }
             .toMap()
@@ -145,5 +209,7 @@ class UserPreferences(context: Context) {
         const val KEY_AUDIO_PLAY_COUNTS = "audio_play_counts"
         const val KEY_QURAN_CYCLE_COUNT = "quran_cycle_count"
         const val KEY_MUTUN_CYCLE_COUNT = "mutun_cycle_count"
+        const val KEY_LAST_ACTIVE_AUDIO_ID = "last_active_audio_id"
+        const val KEY_AUDIO_POSITIONS_MS = "audio_positions_ms"
     }
 }

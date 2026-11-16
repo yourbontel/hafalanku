@@ -457,8 +457,10 @@ fun ListenScreen(
                     AudioTargetType.GENERAL -> "Audio Muraja'ah"
                 }
                 val playCount = prefs.audioPlayCounts[audio.id] ?: 0
+                val savedPosMs = prefs.audioPositionsMs[audio.id] ?: 0L
                 val lockStatus = when {
                     !isUnlocked -> "Terkunci (selesaikan #${index} dulu)"
+                    savedPosMs > 0L -> "Lanjut ${formatDuration(savedPosMs)}"
                     isCompleted -> "Selesai"
                     else -> "Siap diputar"
                 }

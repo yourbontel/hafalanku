@@ -75,6 +75,16 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onPause() {
+        super.onPause()
+        viewModel.persistPlaybackPosition()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        viewModel.persistPlaybackPosition()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
