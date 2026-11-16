@@ -41,7 +41,11 @@ data class AudioPlayerState(
     val errorMessage: String? = null
 )
 
-class AudioPlayerManager(context: Context) {
+class AudioPlayerManager(
+    context: Context,
+    private val completedAudioIdsProvider: () -> Set<Long>,
+    private val onAudioCompleted: (Long) -> Unit
+) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var positionTickerJob: Job? = null
@@ -206,18 +210,6 @@ class AudioPlayerManager(context: Context) {
         }
     }
 
-    fun seekTo(positionMs: Long) {
-        val clamped = positionMs.coerceIn(0L, _state.value.durationMs.coerceAtLeast(0L))
-        exoPlayer?.seekTo(clamped)
-        _state.update { it.copy(positionMs = clamped) }
-    }
-
-    fun seekBy(deltaMs: Long) {
-        val currentPos = exoPlayer?.currentPosition ?: _state.value.positionMs
-        val target = (currentPos + deltaMs).coerceIn(0L, _state.value.durationMs.coerceAtLeast(0L))
-        seekTo(target)
-    }
-
     fun setPlaybackSpeed(speed: Float) {
         val clamped = speed.coerceIn(0.5f, 2.0f)
         exoPlayer?.setPlaybackParameters(PlaybackParameters(clamped))
@@ -247,35 +239,37 @@ class AudioPlayerManager(context: Context) {
     fun hasNextInPlaylist(): Boolean {
         val list = _state.value.playlist
         val current = _state.value.currentAudio ?: return false
-        if (list.size <= 1) return false
         val idx = list.indexOfFirst { it.id == current.id }
-        return idx >= 0 && idx + 1 < list.size
+        return SequentialLockPolicy.canAdvanceToNext(list, idx, completedAudioIdsProvider())
     }
 
     fun hasPreviousInPlaylist(): Boolean {
         val list = _state.value.playlist
         val current = _state.value.currentAudio ?: return false
-        if (list.size <= 1) return false
         val idx = list.indexOfFirst { it.id == current.id }
-        return idx > 0
+        return SequentialLockPolicy.canGoToPrevious(list, idx, completedAudioIdsProvider())
     }
 
-    fun playNextInPlaylist() {
+    fun playNextInPlaylist(): Boolean {
         val list = _state.value.playlist
-        val current = _state.value.currentAudio ?: return
-        if (list.isEmpty()) return
+        val current = _state.value.currentAudio ?: return false
         val idx = list.indexOfFirst { it.id == current.id }
-        val nextIdx = if (idx < 0 || idx + 1 >= list.size) 0 else idx + 1
-        startNewTrack(list[nextIdx], list)
+        if (!SequentialLockPolicy.canAdvanceToNext(list, idx, completedAudioIdsProvider())) {
+            return false
+        }
+        startNewTrack(list[idx + 1], list)
+        return true
     }
 
-    fun playPreviousInPlaylist() {
+    fun playPreviousInPlaylist(): Boolean {
         val list = _state.value.playlist
-        val current = _state.value.currentAudio ?: return
-        if (list.isEmpty()) return
+        val current = _state.value.currentAudio ?: return false
         val idx = list.indexOfFirst { it.id == current.id }
-        val prevIdx = if (idx <= 0) list.lastIndex else idx - 1
-        startNewTrack(list[prevIdx], list)
+        if (!SequentialLockPolicy.canGoToPrevious(list, idx, completedAudioIdsProvider())) {
+            return false
+        }
+        startNewTrack(list[idx - 1], list)
+        return true
     }
 
     fun stopAndDismiss() {
@@ -307,6 +301,14 @@ class AudioPlayerManager(context: Context) {
     private fun handleTrackEnded() {
         val snapshot = _state.value
         val player = exoPlayer ?: return
+        val currentAudio = snapshot.currentAudio ?: return
+        val target = snapshot.loopMode.targetCount
+
+        // Only mark track completed once all required loop repetitions finish
+        if (target != null && snapshot.currentLoopIteration >= target) {
+            onAudioCompleted(currentAudio.id)
+        }
+
         val action = LoopRepeatTracker.onTrackEnded(
             loopMode = snapshot.loopMode,
             currentIteration = snapshot.currentLoopIteration,

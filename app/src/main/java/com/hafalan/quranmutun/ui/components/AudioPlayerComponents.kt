@@ -16,12 +16,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
@@ -33,7 +31,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -179,10 +176,10 @@ fun MiniAudioPlayerBar(
 @Composable
 fun FullAudioPlayerSheet(
     state: AudioPlayerState,
+    canSkipPrevious: Boolean,
+    canSkipNext: Boolean,
     onDismiss: () -> Unit,
     onTogglePlayPause: () -> Unit,
-    onSeekTo: (Long) -> Unit,
-    onSeekBy: (Long) -> Unit,
     onSetLoopMode: (LoopMode) -> Unit,
     onSetSpeed: (Float) -> Unit,
     onPrevious: () -> Unit,
@@ -246,14 +243,20 @@ fun FullAudioPlayerSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            val maxDuration = state.durationMs.coerceAtLeast(1L)
-            Slider(
-                value = state.positionMs.coerceIn(0L, maxDuration).toFloat(),
-                onValueChange = { onSeekTo(it.toLong()) },
-                valueRange = 0f..maxDuration.toFloat(),
-                enabled = state.durationMs > 0L
+            Spacer(modifier = Modifier.height(18.dp))
+            val progress = if (state.durationMs > 0L) {
+                (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
+            } else 0f
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(999.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -278,6 +281,12 @@ fun FullAudioPlayerSheet(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
                     )
+                } else {
+                    Text(
+                        text = "Mode dengar penuh (tanpa lewati)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Text(
                     text = if (state.durationMs > 0L) formatDuration(state.durationMs) else "--:--",
@@ -294,12 +303,9 @@ fun FullAudioPlayerSheet(
             ) {
                 IconButton(
                     onClick = onPrevious,
-                    enabled = state.playlist.size > 1
+                    enabled = canSkipPrevious
                 ) {
                     Icon(Icons.Rounded.SkipPrevious, contentDescription = "Sebelumnya")
-                }
-                IconButton(onClick = { onSeekBy(-10_000L) }) {
-                    Icon(Icons.Rounded.Replay10, contentDescription = "Mundur 10 detik")
                 }
                 Box(
                     modifier = Modifier
@@ -324,12 +330,9 @@ fun FullAudioPlayerSheet(
                         )
                     }
                 }
-                IconButton(onClick = { onSeekBy(10_000L) }) {
-                    Icon(Icons.Rounded.Forward10, contentDescription = "Maju 10 detik")
-                }
                 IconButton(
                     onClick = onNext,
-                    enabled = state.playlist.size > 1
+                    enabled = canSkipNext
                 ) {
                     Icon(Icons.Rounded.SkipNext, contentDescription = "Berikutnya")
                 }

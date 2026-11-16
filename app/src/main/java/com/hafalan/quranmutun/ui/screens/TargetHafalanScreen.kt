@@ -20,7 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Tune
@@ -58,7 +60,9 @@ import com.hafalan.quranmutun.data.local.DriveAudioEntity
 import com.hafalan.quranmutun.data.local.ListeningPreferences
 import com.hafalan.quranmutun.data.local.MutunItemEntity
 import com.hafalan.quranmutun.data.local.SurahProgressEntity
+import com.hafalan.quranmutun.data.model.AudioTargetType
 import com.hafalan.quranmutun.player.AudioPlayerState
+import com.hafalan.quranmutun.player.SequentialLockPolicy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +93,22 @@ fun TargetHafalanScreen(
     }
     val audiosByMutun = remember(audios) {
         audios.filter { it.mutunId != null }.groupBy { it.mutunId!! }
+    }
+    val orderedQuran = remember(audios, prefs.minHafalanSurah, prefs.maxHafalanSurah) {
+        SequentialLockPolicy.orderedPlaylistForCategory(
+            allAudios = audios,
+            targetType = AudioTargetType.QURAN,
+            minHafalanSurah = prefs.minHafalanSurah,
+            maxHafalanSurah = prefs.maxHafalanSurah
+        )
+    }
+    val orderedMutun = remember(audios, prefs.minHafalanSurah, prefs.maxHafalanSurah) {
+        SequentialLockPolicy.orderedPlaylistForCategory(
+            allAudios = audios,
+            targetType = AudioTargetType.MUTUN,
+            minHafalanSurah = prefs.minHafalanSurah,
+            maxHafalanSurah = prefs.maxHafalanSurah
+        )
     }
 
     val fromSurah = surahs.find { it.surahNumber == prefs.minHafalanSurah }
@@ -219,6 +239,9 @@ fun TargetHafalanScreen(
         items(targetSurahs, key = { "target-surah-${it.surahNumber}" }) { surah ->
             val surahAudios = audiosBySurah[surah.surahNumber].orEmpty()
             val firstAudio = surahAudios.firstOrNull()
+            val firstIdx = firstAudio?.let { audio -> orderedQuran.indexOfFirst { it.id == audio.id } } ?: -1
+            val isUnlocked = firstIdx >= 0 && SequentialLockPolicy.isUnlocked(orderedQuran, firstIdx, prefs.completedAudioIds)
+            val isCompleted = firstAudio != null && firstAudio.id in prefs.completedAudioIds
             val isPlayingThis = firstAudio != null && audioState.currentAudio?.id == firstAudio.id && audioState.isPlaying
 
             Card(
@@ -278,11 +301,16 @@ fun TargetHafalanScreen(
                     }
 
                     if (firstAudio != null) {
-                        IconButton(onClick = { onPlayAudio(firstAudio, surahAudios) }) {
+                        IconButton(onClick = { onPlayAudio(firstAudio, orderedQuran) }) {
                             Icon(
-                                imageVector = if (isPlayingThis) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                imageVector = when {
+                                    !isUnlocked -> Icons.Rounded.Lock
+                                    isPlayingThis -> Icons.Rounded.Pause
+                                    isCompleted -> Icons.Rounded.CheckCircle
+                                    else -> Icons.Rounded.PlayArrow
+                                },
                                 contentDescription = "Putar ${surah.nameLatin}",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = if (isUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         IconButton(onClick = { onAddAudioForSurah(surah) }) {
@@ -335,6 +363,9 @@ fun TargetHafalanScreen(
         items(mutunItems, key = { "target-mutun-${it.id}" }) { mutun ->
             val mutunAudios = audiosByMutun[mutun.id].orEmpty()
             val firstAudio = mutunAudios.firstOrNull()
+            val firstIdx = firstAudio?.let { audio -> orderedMutun.indexOfFirst { it.id == audio.id } } ?: -1
+            val isUnlocked = firstIdx >= 0 && SequentialLockPolicy.isUnlocked(orderedMutun, firstIdx, prefs.completedAudioIds)
+            val isCompleted = firstAudio != null && firstAudio.id in prefs.completedAudioIds
             val isPlayingThis = firstAudio != null && audioState.currentAudio?.id == firstAudio.id && audioState.isPlaying
 
             Card(
@@ -342,7 +373,7 @@ fun TargetHafalanScreen(
                     .fillMaxWidth()
                     .clickable {
                         if (firstAudio != null) {
-                            onPlayAudio(firstAudio, mutunAudios)
+                            onPlayAudio(firstAudio, orderedMutun)
                         } else {
                             onAddAudioForMutun(mutun)
                         }
@@ -383,13 +414,18 @@ fun TargetHafalanScreen(
                     if (firstAudio != null) {
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary
+                            color = if (isUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
                         ) {
-                            IconButton(onClick = { onPlayAudio(firstAudio, mutunAudios) }) {
+                            IconButton(onClick = { onPlayAudio(firstAudio, orderedMutun) }) {
                                 Icon(
-                                    imageVector = if (isPlayingThis) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                    imageVector = when {
+                                        !isUnlocked -> Icons.Rounded.Lock
+                                        isPlayingThis -> Icons.Rounded.Pause
+                                        isCompleted -> Icons.Rounded.CheckCircle
+                                        else -> Icons.Rounded.PlayArrow
+                                    },
                                     contentDescription = "Putar ${mutun.title}",
-                                    tint = Color.White
+                                    tint = if (isUnlocked) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }

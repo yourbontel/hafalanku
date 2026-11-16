@@ -10,7 +10,8 @@ data class ListeningPreferences(
     val minHafalanSurah: Int = 1,
     val maxHafalanSurah: Int = 9, // Default sampai At-Taubah (Surah 9)
     val autoAdvancePlaylist: Boolean = true,
-    val keepScreenOnInDrivingMode: Boolean = false
+    val keepScreenOnInDrivingMode: Boolean = false,
+    val completedAudioIds: Set<Long> = emptySet()
 )
 
 class UserPreferences(context: Context) {
@@ -23,11 +24,14 @@ class UserPreferences(context: Context) {
     private fun load(): ListeningPreferences {
         val minSurah = prefs.getInt(KEY_MIN_SURAH, 1).coerceIn(1, 114)
         val maxSurah = prefs.getInt(KEY_MAX_SURAH, 9).coerceIn(minSurah, 114)
+        val completedRaw = prefs.getStringSet(KEY_COMPLETED_AUDIO_IDS, emptySet()).orEmpty()
+        val completedIds = completedRaw.mapNotNull { it.toLongOrNull() }.toSet()
         return ListeningPreferences(
             minHafalanSurah = minSurah,
             maxHafalanSurah = maxSurah,
             autoAdvancePlaylist = prefs.getBoolean(KEY_AUTO_ADVANCE, true),
-            keepScreenOnInDrivingMode = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false)
+            keepScreenOnInDrivingMode = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false),
+            completedAudioIds = completedIds
         )
     }
 
@@ -51,10 +55,29 @@ class UserPreferences(context: Context) {
         _state.update { it.copy(keepScreenOnInDrivingMode = enabled) }
     }
 
+    fun markAudioCompleted(audioId: Long) {
+        val updated = _state.value.completedAudioIds + audioId
+        saveCompletedIds(updated)
+    }
+
+    fun resetCompletedAudios(audioIdsToReset: Collection<Long>) {
+        if (audioIdsToReset.isEmpty()) return
+        val updated = _state.value.completedAudioIds - audioIdsToReset.toSet()
+        saveCompletedIds(updated)
+    }
+
+    private fun saveCompletedIds(ids: Set<Long>) {
+        prefs.edit()
+            .putStringSet(KEY_COMPLETED_AUDIO_IDS, ids.map { it.toString() }.toSet())
+            .apply()
+        _state.update { it.copy(completedAudioIds = ids) }
+    }
+
     private companion object {
         const val KEY_MIN_SURAH = "min_hafalan_surah"
         const val KEY_MAX_SURAH = "max_hafalan_surah"
         const val KEY_AUTO_ADVANCE = "auto_advance_playlist"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on_driving"
+        const val KEY_COMPLETED_AUDIO_IDS = "completed_audio_ids"
     }
 }

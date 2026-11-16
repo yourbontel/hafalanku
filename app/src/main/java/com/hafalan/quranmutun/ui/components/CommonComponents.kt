@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Card
@@ -117,15 +119,17 @@ fun DriveAudioRow(
     isPlaying: Boolean,
     onPlayClick: () -> Unit,
     onDeleteClick: (() -> Unit)? = null,
-    subtitleOverride: String? = null
+    subtitleOverride: String? = null,
+    isLocked: Boolean = false,
+    isCompleted: Boolean = false
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isCurrentTrack) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = when {
+                isCurrentTrack -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                isLocked -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             }
         ),
         shape = RoundedCornerShape(14.dp)
@@ -140,14 +144,21 @@ fun DriveAudioRow(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                    .background(
+                        if (isLocked) MaterialTheme.colorScheme.outlineVariant
+                        else MaterialTheme.colorScheme.primary
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 IconButton(onClick = onPlayClick) {
                     Icon(
-                        imageVector = if (isCurrentTrack && isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = "Putar audio",
-                        tint = Color.White
+                        imageVector = when {
+                            isLocked -> Icons.Rounded.Lock
+                            isCurrentTrack && isPlaying -> Icons.Rounded.Pause
+                            else -> Icons.Rounded.PlayArrow
+                        },
+                        contentDescription = if (isLocked) "Terkunci" else "Putar audio",
+                        tint = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant else Color.White
                     )
                 }
             }
@@ -162,11 +173,20 @@ fun DriveAudioRow(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
+                    } else if (isCompleted) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = "Selesai",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
                     Text(
                         text = audio.title,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
+                        color = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

@@ -10,7 +10,13 @@ class HafalanApp : Application() {
     val database: AppDatabase by lazy { AppDatabase.getInstance(this) }
     val userPreferences: UserPreferences by lazy { UserPreferences(this) }
     val repository: HafalanRepository by lazy { HafalanRepository(database) }
-    val audioPlayerManager: AudioPlayerManager by lazy { AudioPlayerManager(this) }
+    val audioPlayerManager: AudioPlayerManager by lazy {
+        AudioPlayerManager(
+            context = this,
+            completedAudioIdsProvider = { userPreferences.state.value.completedAudioIds },
+            onAudioCompleted = { audioId -> userPreferences.markAudioCompleted(audioId) }
+        )
+    }
 
     override fun onTerminate() {
         super.onTerminate()

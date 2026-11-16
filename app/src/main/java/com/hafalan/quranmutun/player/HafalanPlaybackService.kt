@@ -42,25 +42,67 @@ class HafalanPlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
+        // Lock seeking forward/backward and only allow Next when sequential rule permits
         val forwardingPlayer = object : ForwardingPlayer(player) {
             override fun getAvailableCommands(): Player.Commands {
-                val base = super.getAvailableCommands()
-                return base.buildUpon()
-                    .add(Player.COMMAND_SEEK_TO_NEXT)
-                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-                    .build()
+                val builder = super.getAvailableCommands().buildUpon()
+                    .remove(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+                    .remove(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
+                    .remove(Player.COMMAND_SEEK_BACK)
+                    .remove(Player.COMMAND_SEEK_FORWARD)
+                if (app.audioPlayerManager.hasNextInPlaylist()) {
+                    builder.add(Player.COMMAND_SEEK_TO_NEXT)
+                    builder.add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                } else {
+                    builder.remove(Player.COMMAND_SEEK_TO_NEXT)
+                    builder.remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                }
+                if (app.audioPlayerManager.hasPreviousInPlaylist()) {
+                    builder.add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    builder.add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                } else {
+                    builder.remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    builder.remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                }
+                return builder.build()
             }
 
             override fun isCommandAvailable(command: Int): Boolean {
                 return when (command) {
+                    Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+                    Player.COMMAND_SEEK_TO_DEFAULT_POSITION,
+                    Player.COMMAND_SEEK_BACK,
+                    Player.COMMAND_SEEK_FORWARD -> false
                     Player.COMMAND_SEEK_TO_NEXT,
                     Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> app.audioPlayerManager.hasNextInPlaylist()
                     Player.COMMAND_SEEK_TO_PREVIOUS,
                     Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> app.audioPlayerManager.hasPreviousInPlaylist()
                     else -> super.isCommandAvailable(command)
                 }
+            }
+
+            override fun seekTo(positionMs: Long) {
+                // Disabled: audio cannot be skipped forward or backward
+            }
+
+            override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+                // Disabled: audio cannot be skipped forward or backward
+            }
+
+            override fun seekToDefaultPosition() {
+                // Disabled
+            }
+
+            override fun seekToDefaultPosition(mediaItemIndex: Int) {
+                // Disabled
+            }
+
+            override fun seekBack() {
+                // Disabled
+            }
+
+            override fun seekForward() {
+                // Disabled
             }
 
             override fun hasNextMediaItem(): Boolean = app.audioPlayerManager.hasNextInPlaylist()

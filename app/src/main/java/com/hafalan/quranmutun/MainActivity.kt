@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hafalan.quranmutun.data.model.AudioTargetType
+import com.hafalan.quranmutun.player.SequentialLockPolicy
 import com.hafalan.quranmutun.ui.components.AddDriveAudioDialog
 import com.hafalan.quranmutun.ui.components.FullAudioPlayerSheet
 import com.hafalan.quranmutun.ui.components.MiniAudioPlayerBar
@@ -47,7 +48,7 @@ import com.hafalan.quranmutun.ui.theme.HafalanTheme
 import com.hafalan.quranmutun.ui.viewmodel.MainViewModel
 
 private enum class AppTab(val label: String, val title: String, val icon: ImageVector) {
-    LISTEN("Dengarkan", "Muraja'ah Audio", Icons.Rounded.Headphones),
+    LISTEN("Dengarkan", "Muraja'ah Berurutan", Icons.Rounded.Headphones),
     TARGET("Hafalan Saya", "Target Hafalan & Mutun", Icons.Rounded.MenuBook),
     LIBRARY("Pustaka Drive", "Pustaka Google Drive", Icons.Rounded.CloudQueue)
 }
@@ -93,6 +94,33 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
         viewModel.toastMessage.collect { msg ->
             snackbarHostState.showSnackbar(msg)
         }
+    }
+
+    val currentIndexInPlaylist = remember(audioState.currentAudio, audioState.playlist) {
+        val id = audioState.currentAudio?.id ?: return@remember -1
+        audioState.playlist.indexOfFirst { it.id == id }
+    }
+    val canSkipPrevious = remember(
+        audioState.playlist,
+        currentIndexInPlaylist,
+        uiState.listeningPrefs.completedAudioIds
+    ) {
+        SequentialLockPolicy.canGoToPrevious(
+            audioState.playlist,
+            currentIndexInPlaylist,
+            uiState.listeningPrefs.completedAudioIds
+        )
+    }
+    val canSkipNext = remember(
+        audioState.playlist,
+        currentIndexInPlaylist,
+        uiState.listeningPrefs.completedAudioIds
+    ) {
+        SequentialLockPolicy.canAdvanceToNext(
+            audioState.playlist,
+            currentIndexInPlaylist,
+            uiState.listeningPrefs.completedAudioIds
+        )
     }
 
     Scaffold(
@@ -145,7 +173,8 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
                         prefs = uiState.listeningPrefs,
                         audioState = audioState,
                         onPlayAudio = viewModel::playAudio,
-                        onPlayQueueFromStart = viewModel::playQueueFromStart,
+                        onPlayOrderedCategory = viewModel::playOrderedCategory,
+                        onResetSequence = viewModel::resetSequenceProgress,
                         onOpenDrivingMode = { showDrivingMode = true },
                         onOpenAddAudio = { addAudioConfig = AddAudioDialogConfig() },
                         onSetAutoAdvance = viewModel::setAutoAdvancePlaylist,
@@ -194,6 +223,7 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
                         audios = uiState.audios,
                         surahs = uiState.surahs,
                         mutunItems = uiState.mutunItems,
+                        prefs = uiState.listeningPrefs,
                         audioState = audioState,
                         onOpenAddAudio = { addAudioConfig = AddAudioDialogConfig() },
                         onPlayAudio = viewModel::playAudio,
@@ -207,10 +237,10 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
     if (showFullPlayerSheet && audioState.currentAudio != null) {
         FullAudioPlayerSheet(
             state = audioState,
+            canSkipPrevious = canSkipPrevious,
+            canSkipNext = canSkipNext,
             onDismiss = { showFullPlayerSheet = false },
             onTogglePlayPause = viewModel::togglePlayPause,
-            onSeekTo = viewModel::seekTo,
-            onSeekBy = viewModel::seekBy,
             onSetLoopMode = viewModel::setLoopMode,
             onSetSpeed = viewModel::setPlaybackSpeed,
             onPrevious = viewModel::playPreviousInPlaylist,
@@ -221,14 +251,14 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
     if (showDrivingMode) {
         DrivingModeOverlay(
             audioState = audioState,
+            canSkipPrevious = canSkipPrevious,
+            canSkipNext = canSkipNext,
             keepScreenOn = uiState.listeningPrefs.keepScreenOnInDrivingMode,
             onToggleKeepScreenOn = viewModel::setKeepScreenOnInDrivingMode,
             onTogglePlayPause = viewModel::togglePlayPause,
             onPrevious = viewModel::playPreviousInPlaylist,
             onNext = viewModel::playNextInPlaylist,
-            onSeekBy = viewModel::seekBy,
             onCycleLoop = viewModel::cycleLoopMode,
-            onSetSpeed = viewModel::setPlaybackSpeed,
             onDismiss = { showDrivingMode = false }
         )
     }

@@ -36,10 +36,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hafalan.quranmutun.data.local.DriveAudioEntity
+import com.hafalan.quranmutun.data.local.ListeningPreferences
 import com.hafalan.quranmutun.data.local.MutunItemEntity
 import com.hafalan.quranmutun.data.local.SurahProgressEntity
 import com.hafalan.quranmutun.data.model.AudioTargetType
 import com.hafalan.quranmutun.player.AudioPlayerState
+import com.hafalan.quranmutun.player.SequentialLockPolicy
 import com.hafalan.quranmutun.ui.components.DriveAudioRow
 
 @Composable
@@ -47,6 +49,7 @@ fun AudioLibraryScreen(
     audios: List<DriveAudioEntity>,
     surahs: List<SurahProgressEntity>,
     mutunItems: List<MutunItemEntity>,
+    prefs: ListeningPreferences,
     audioState: AudioPlayerState,
     onOpenAddAudio: () -> Unit,
     onPlayAudio: (DriveAudioEntity, List<DriveAudioEntity>) -> Unit,
@@ -56,6 +59,31 @@ fun AudioLibraryScreen(
 
     val surahMap = remember(surahs) { surahs.associateBy { it.surahNumber } }
     val mutunMap = remember(mutunItems) { mutunItems.associateBy { it.id } }
+
+    val orderedQuran = remember(audios, prefs.minHafalanSurah, prefs.maxHafalanSurah) {
+        SequentialLockPolicy.orderedPlaylistForCategory(
+            allAudios = audios,
+            targetType = AudioTargetType.QURAN,
+            minHafalanSurah = prefs.minHafalanSurah,
+            maxHafalanSurah = prefs.maxHafalanSurah
+        )
+    }
+    val orderedMutun = remember(audios, prefs.minHafalanSurah, prefs.maxHafalanSurah) {
+        SequentialLockPolicy.orderedPlaylistForCategory(
+            allAudios = audios,
+            targetType = AudioTargetType.MUTUN,
+            minHafalanSurah = prefs.minHafalanSurah,
+            maxHafalanSurah = prefs.maxHafalanSurah
+        )
+    }
+    val orderedGeneral = remember(audios, prefs.minHafalanSurah, prefs.maxHafalanSurah) {
+        SequentialLockPolicy.orderedPlaylistForCategory(
+            allAudios = audios,
+            targetType = AudioTargetType.GENERAL,
+            minHafalanSurah = prefs.minHafalanSurah,
+            maxHafalanSurah = prefs.maxHafalanSurah
+        )
+    }
 
     val filteredAudios = remember(audios, selectedType) {
         if (selectedType == null) audios else audios.filter { it.targetType == selectedType }
@@ -188,13 +216,28 @@ fun AudioLibraryScreen(
                             append(audio.reciterOrSource)
                         }
                     }
+                    val categoryQueue = when (audio.targetType) {
+                        AudioTargetType.QURAN -> orderedQuran
+                        AudioTargetType.MUTUN -> orderedMutun
+                        AudioTargetType.GENERAL -> orderedGeneral
+                    }
+                    val idxInQueue = categoryQueue.indexOfFirst { it.id == audio.id }
+                    val isLocked = idxInQueue < 0 || !SequentialLockPolicy.isUnlocked(
+                        categoryQueue,
+                        idxInQueue,
+                        prefs.completedAudioIds
+                    )
+                    val isCompleted = audio.id in prefs.completedAudioIds
+
                     DriveAudioRow(
                         audio = audio,
                         isCurrentTrack = audioState.currentAudio?.id == audio.id,
                         isPlaying = audioState.isPlaying,
-                        onPlayClick = { onPlayAudio(audio, filteredAudios) },
+                        onPlayClick = { onPlayAudio(audio, categoryQueue) },
                         onDeleteClick = { onDeleteAudio(audio) },
-                        subtitleOverride = subtitle
+                        subtitleOverride = subtitle,
+                        isLocked = isLocked,
+                        isCompleted = isCompleted
                     )
                 }
             }

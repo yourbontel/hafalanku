@@ -21,6 +21,7 @@ import com.hafalan.quranmutun.data.model.MemorizationStatus
 import com.hafalan.quranmutun.data.repository.HafalanRepository
 import com.hafalan.quranmutun.player.AudioPlayerManager
 import com.hafalan.quranmutun.player.AudioPlayerState
+import com.hafalan.quranmutun.player.SequentialLockPolicy
 import com.hafalan.quranmutun.ui.state.DashboardSummary
 import com.hafalan.quranmutun.ui.state.ProgressSummaryCalculator
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -443,27 +444,75 @@ class MainViewModel(
         }
     }
 
-    fun playAudio(audio: DriveAudioEntity, playlist: List<DriveAudioEntity> = uiState.value.audios) {
-        playerManager.playAudio(audio, playlist)
-    }
+    fun playAudio(audio: DriveAudioEntity, playlistHint: List<DriveAudioEntity> = uiState.value.audios) {
+        val state = uiState.value
+        val prefs = state.listeningPrefs
+        val canonicalPlaylist = SequentialLockPolicy.orderedPlaylistForCategory(
+            allAudios = state.audios,
+            targetType = audio.targetType,
+            minHafalanSurah = prefs.minHafalanSurah,
+            maxHafalanSurah = prefs.maxHafalanSurah
+        ).ifEmpty { playlistHint }
 
-    fun playQueueFromStart(playlist: List<DriveAudioEntity>, shuffle: Boolean = false) {
-        if (playlist.isEmpty()) {
-            _toastMessage.tryEmit("Belum ada audio di daftar putar ini")
+        val targetIndex = canonicalPlaylist.indexOfFirst { it.id == audio.id }
+        if (targetIndex < 0) {
+            _toastMessage.tryEmit("Audio berada di luar rentang target hafalan Anda")
             return
         }
-        val queue = if (shuffle) playlist.shuffled() else playlist
-        playerManager.playAudio(queue.first(), queue)
+
+        if (!SequentialLockPolicy.isUnlocked(canonicalPlaylist, targetIndex, prefs.completedAudioIds)) {
+            val blockingTitle = canonicalPlaylist[targetIndex - 1].title
+            _toastMessage.tryEmit("Terkunci: selesaikan \"$blockingTitle\" sampai tuntas dulu")
+            return
+        }
+
+        playerManager.playAudio(audio, canonicalPlaylist)
+    }
+
+    fun playOrderedCategory(targetType: AudioTargetType) {
+        val state = uiState.value
+        val prefs = state.listeningPrefs
+        val canonicalPlaylist = SequentialLockPolicy.orderedPlaylistForCategory(
+            allAudios = state.audios,
+            targetType = targetType,
+            minHafalanSurah = prefs.minHafalanSurah,
+            maxHafalanSurah = prefs.maxHafalanSurah
+        )
+        if (canonicalPlaylist.isEmpty()) {
+            _toastMessage.tryEmit("Belum ada audio di daftar putar ${targetType.labelId}")
+            return
+        }
+        val nextIdx = SequentialLockPolicy.firstPendingIndex(canonicalPlaylist, prefs.completedAudioIds)
+        playerManager.playAudio(canonicalPlaylist[nextIdx], canonicalPlaylist)
+    }
+
+    fun resetSequenceProgress(targetType: AudioTargetType) {
+        val state = uiState.value
+        val prefs = state.listeningPrefs
+        val canonicalPlaylist = SequentialLockPolicy.orderedPlaylistForCategory(
+            allAudios = state.audios,
+            targetType = targetType,
+            minHafalanSurah = prefs.minHafalanSurah,
+            maxHafalanSurah = prefs.maxHafalanSurah
+        )
+        userPreferences.resetCompletedAudios(canonicalPlaylist.map { it.id })
+        _toastMessage.tryEmit("Urutan ${targetType.labelId} dikunci ulang dari awal")
     }
 
     fun togglePlayPause() = playerManager.togglePlayPause()
-    fun seekTo(positionMs: Long) = playerManager.seekTo(positionMs)
-    fun seekBy(deltaMs: Long) = playerManager.seekBy(deltaMs)
     fun setPlaybackSpeed(speed: Float) = playerManager.setPlaybackSpeed(speed)
     fun setLoopMode(loopMode: LoopMode) = playerManager.setLoopMode(loopMode)
     fun cycleLoopMode() = playerManager.cycleLoopMode()
-    fun playNextInPlaylist() = playerManager.playNextInPlaylist()
-    fun playPreviousInPlaylist() = playerManager.playPreviousInPlaylist()
+    fun playNextInPlaylist() {
+        if (!playerManager.playNextInPlaylist()) {
+            _toastMessage.tryEmit("Selesaikan audio ini dulu untuk membuka urutan berikutnya")
+        }
+    }
+
+    fun playPreviousInPlaylist() {
+        playerManager.playPreviousInPlaylist()
+    }
+
     fun stopPlayer() = playerManager.stopAndDismiss()
     fun clearPlayerError() = playerManager.clearError()
 
