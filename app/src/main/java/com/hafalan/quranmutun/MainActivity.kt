@@ -175,6 +175,18 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
                                 lockTarget = true
                             )
                         },
+                        onUpdateMutunDetails = viewModel::updateMutunDetails,
+                        onAddCustomMutun = { title, category, author ->
+                            viewModel.addMutun(
+                                title = title,
+                                author = author,
+                                category = category,
+                                unitLabel = "Bagian",
+                                totalUnits = 1,
+                                sectionNamesRaw = ""
+                            )
+                        },
+                        onDeleteMutun = viewModel::deleteMutun,
                         onPlayAudio = viewModel::playAudio
                     )
 

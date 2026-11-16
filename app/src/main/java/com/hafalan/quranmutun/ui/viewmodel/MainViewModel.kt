@@ -221,6 +221,29 @@ class MainViewModel(
         }
     }
 
+    fun updateMutunDetails(
+        item: MutunItemEntity,
+        title: String,
+        category: String,
+        author: String
+    ) {
+        val trimmedTitle = title.trim()
+        if (trimmedTitle.isEmpty()) {
+            _toastMessage.tryEmit("Judul mutun tidak boleh kosong")
+            return
+        }
+        viewModelScope.launch {
+            repository.updateMutun(
+                item.copy(
+                    title = trimmedTitle,
+                    category = category.trim().ifEmpty { "Umum" },
+                    author = author.trim()
+                )
+            )
+            _toastMessage.tryEmit("Judul mutun diubah menjadi \"$trimmedTitle\"")
+        }
+    }
+
     fun deleteMutun(item: MutunItemEntity) {
         viewModelScope.launch {
             repository.deleteMutun(item)

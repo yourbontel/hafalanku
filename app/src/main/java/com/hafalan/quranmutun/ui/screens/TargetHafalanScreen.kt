@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,10 +20,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoStories
-import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -39,6 +41,7 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,10 +71,15 @@ fun TargetHafalanScreen(
     onSetHafalanRange: (Int, Int) -> Unit,
     onAddAudioForSurah: (SurahProgressEntity) -> Unit,
     onAddAudioForMutun: (MutunItemEntity) -> Unit,
+    onUpdateMutunDetails: (MutunItemEntity, String, String, String) -> Unit,
+    onAddCustomMutun: (String, String, String) -> Unit,
+    onDeleteMutun: (MutunItemEntity) -> Unit,
     onPlayAudio: (DriveAudioEntity, List<DriveAudioEntity>) -> Unit
 ) {
     var fromExpanded by remember { mutableStateOf(false) }
     var toExpanded by remember { mutableStateOf(false) }
+    var editingMutun by remember { mutableStateOf<MutunItemEntity?>(null) }
+    var showAddMutunDialog by remember { mutableStateOf(false) }
 
     val targetSurahs = remember(surahs, prefs.minHafalanSurah, prefs.maxHafalanSurah) {
         surahs.filter { it.surahNumber in prefs.minHafalanSurah..prefs.maxHafalanSurah }
@@ -297,20 +305,30 @@ fun TargetHafalanScreen(
 
         item {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoStories,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Audio Mutun Ilmiah",
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.AutoStories,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Audio Mutun Ilmiah",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                TextButton(onClick = { showAddMutunDialog = true }) {
+                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Tambah Mutun")
+                }
             }
         }
 
@@ -355,6 +373,13 @@ fun TargetHafalanScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    IconButton(onClick = { editingMutun = mutun }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = "Edit judul mutun",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (firstAudio != null) {
                         Surface(
                             shape = CircleShape,
@@ -381,5 +406,131 @@ fun TargetHafalanScreen(
                 }
             }
         }
+    }
+
+    editingMutun?.let { target ->
+        EditMutunTitleDialog(
+            initialTitle = target.title,
+            initialCategory = target.category,
+            initialAuthor = target.author,
+            isNew = false,
+            onDismiss = { editingMutun = null },
+            onSave = { title, category, author ->
+                onUpdateMutunDetails(target, title, category, author)
+                editingMutun = null
+            },
+            onDelete = {
+                onDeleteMutun(target)
+                editingMutun = null
+            }
+        )
+    }
+
+    if (showAddMutunDialog) {
+        EditMutunTitleDialog(
+            initialTitle = "",
+            initialCategory = "Umum",
+            initialAuthor = "",
+            isNew = true,
+            onDismiss = { showAddMutunDialog = false },
+            onSave = { title, category, author ->
+                onAddCustomMutun(title, category, author)
+                showAddMutunDialog = false
+            },
+            onDelete = null
+        )
+    }
+}
+
+@Composable
+private fun EditMutunTitleDialog(
+    initialTitle: String,
+    initialCategory: String,
+    initialAuthor: String,
+    isNew: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String) -> Unit,
+    onDelete: (() -> Unit)?
+) {
+    var title by remember(initialTitle) { mutableStateOf(initialTitle) }
+    var category by remember(initialCategory) { mutableStateOf(initialCategory) }
+    var author by remember(initialAuthor) { mutableStateOf(initialAuthor) }
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isNew) "Tambah Mutun Ilmiah" else "Edit Judul Mutun") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Judul Mutun *") },
+                    placeholder = { Text("Contoh: Mandzumah Al-Baiquniyah") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = { category = it },
+                    label = { Text("Bidang / Kategori") },
+                    placeholder = { Text("Contoh: Tajwid, Hadits, Aqidah") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = author,
+                    onValueChange = { author = it },
+                    label = { Text("Penulis / Keterangan (opsional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (onDelete != null) {
+                    TextButton(
+                        onClick = { confirmDelete = true },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Hapus Mutun Ini")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = title.isNotBlank(),
+                onClick = { onSave(title, category, author) }
+            ) {
+                Text("Simpan")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal")
+            }
+        }
+    )
+
+    if (confirmDelete && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Hapus Mutun?") },
+            text = { Text("Kitab \"$initialTitle\" akan dihapus dari daftar hafalan Anda.") },
+            confirmButton = {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    onClick = {
+                        confirmDelete = false
+                        onDelete()
+                    }
+                ) {
+                    Text("Hapus")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) {
+                    Text("Batal")
+                }
+            }
+        )
     }
 }
