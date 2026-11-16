@@ -78,12 +78,14 @@ fun TargetHafalanScreen(
     onUpdateMutunDetails: (MutunItemEntity, String, String, String) -> Unit,
     onAddCustomMutun: (String, String, String) -> Unit,
     onDeleteMutun: (MutunItemEntity) -> Unit,
+    onResetStats: () -> Unit,
     onPlayAudio: (DriveAudioEntity, List<DriveAudioEntity>) -> Unit
 ) {
     var fromExpanded by remember { mutableStateOf(false) }
     var toExpanded by remember { mutableStateOf(false) }
     var editingMutun by remember { mutableStateOf<MutunItemEntity?>(null) }
     var showAddMutunDialog by remember { mutableStateOf(false) }
+    var showResetStatsDialog by remember { mutableStateOf(false) }
 
     val targetSurahs = remember(surahs, prefs.minHafalanSurah, prefs.maxHafalanSurah) {
         surahs.filter { it.surahNumber in prefs.minHafalanSurah..prefs.maxHafalanSurah }
@@ -113,12 +115,55 @@ fun TargetHafalanScreen(
 
     val fromSurah = surahs.find { it.surahNumber == prefs.minHafalanSurah }
     val toSurah = surahs.find { it.surahNumber == prefs.maxHafalanSurah }
+    val totalQuranPlays = remember(audios, prefs.audioPlayCounts) {
+        audios.filter { it.targetType == AudioTargetType.QURAN }
+            .sumOf { prefs.audioPlayCounts[it.id] ?: 0 }
+    }
+    val totalMutunPlays = remember(audios, prefs.audioPlayCounts) {
+        audios.filter { it.targetType == AudioTargetType.MUTUN }
+            .sumOf { prefs.audioPlayCounts[it.id] ?: 0 }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Rekap Pengulangan Saya",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        TextButton(onClick = { showResetStatsDialog = true }) {
+                            Text("Reset")
+                        }
+                    }
+                    Text(
+                        text = "Al-Qur'an: ${prefs.quranCycleCount}x khatam urutan (${totalQuranPlays}x putar surah)",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Mutun Ilmiah: ${prefs.mutunCycleCount}x khatam urutan (${totalMutunPlays}x putar mutun)",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -285,11 +330,12 @@ fun TargetHafalanScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
+                        val surahPlayCount = surahAudios.sumOf { prefs.audioPlayCounts[it.id] ?: 0 }
                         Text(
                             text = if (surahAudios.isEmpty()) {
                                 "${surah.totalVerses} ayat • Belum ada audio Drive"
                             } else {
-                                "${surahAudios.size} audio Google Drive siap diputar"
+                                "${surahAudios.size} audio Drive • Diulang ${surahPlayCount}x"
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (surahAudios.isEmpty()) {
@@ -394,11 +440,12 @@ fun TargetHafalanScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        val mutunPlayCount = mutunAudios.sumOf { prefs.audioPlayCounts[it.id] ?: 0 }
                         Text(
                             text = if (mutunAudios.isEmpty()) {
                                 "${mutun.category} • Belum ada audio Drive"
                             } else {
-                                "${mutun.category} • ${mutunAudios.size} audio siap diputar"
+                                "${mutun.category} • ${mutunAudios.size} audio • Diulang ${mutunPlayCount}x"
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -474,6 +521,30 @@ fun TargetHafalanScreen(
                 showAddMutunDialog = false
             },
             onDelete = null
+        )
+    }
+
+    if (showResetStatsDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetStatsDialog = false },
+            title = { Text("Reset Catatan Pengulangan?") },
+            text = { Text("Jumlah putar per surah/mutun dan jumlah khatam urutan akan kembali ke 0.") },
+            confirmButton = {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    onClick = {
+                        showResetStatsDialog = false
+                        onResetStats()
+                    }
+                ) {
+                    Text("Reset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetStatsDialog = false }) {
+                    Text("Batal")
+                }
+            }
         )
     }
 }

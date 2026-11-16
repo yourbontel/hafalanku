@@ -67,6 +67,9 @@ interface DriveAudioDao {
     @Query("SELECT * FROM drive_audios ORDER BY createdAt DESC, id DESC")
     fun observeAll(): Flow<List<DriveAudioEntity>>
 
+    @Query("SELECT * FROM drive_audios")
+    suspend fun getAllOnce(): List<DriveAudioEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(audio: DriveAudioEntity): Long
 

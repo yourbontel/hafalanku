@@ -79,4 +79,34 @@ class SequentialLockPolicyTest {
         // Completing m1 unlocks m2 even if q1 is incomplete
         assertTrue(SequentialLockPolicy.isUnlocked(orderedMutun, 1, setOf(20L)))
     }
+
+    @Test
+    fun `cycle count increments only when final track completes the round`() {
+        val t1 = quranAudio(1L, 2)
+        val t2 = quranAudio(2L, 3)
+        val playlist = listOf(t1, t2)
+
+        assertFalse(
+            SequentialLockPolicy.shouldIncrementCycleOnCompletion(
+                orderedPlaylist = playlist,
+                completedBefore = emptySet(),
+                justCompletedAudioId = 1L
+            )
+        )
+        assertTrue(
+            SequentialLockPolicy.shouldIncrementCycleOnCompletion(
+                orderedPlaylist = playlist,
+                completedBefore = setOf(1L),
+                justCompletedAudioId = 2L
+            )
+        )
+        // Replaying an already completed track in the same round must not double-count
+        assertFalse(
+            SequentialLockPolicy.shouldIncrementCycleOnCompletion(
+                orderedPlaylist = playlist,
+                completedBefore = setOf(1L, 2L),
+                justCompletedAudioId = 2L
+            )
+        )
+    }
 }

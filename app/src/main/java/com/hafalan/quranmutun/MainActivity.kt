@@ -216,6 +216,7 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
                             )
                         },
                         onDeleteMutun = viewModel::deleteMutun,
+                        onResetStats = viewModel::resetRepetitionStats,
                         onPlayAudio = viewModel::playAudio
                     )
 

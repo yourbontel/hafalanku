@@ -44,7 +44,8 @@ data class AudioPlayerState(
 class AudioPlayerManager(
     context: Context,
     private val completedAudioIdsProvider: () -> Set<Long>,
-    private val onAudioCompleted: (Long) -> Unit
+    private val onAudioPlayFinished: (Long) -> Unit,
+    private val onAudioSequenceCompleted: (DriveAudioEntity) -> Unit
 ) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -90,6 +91,21 @@ class AudioPlayerManager(
                 Player.STATE_IDLE -> {
                     _state.update { it.copy(isBuffering = false) }
                 }
+            }
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION &&
+                _state.value.loopMode == LoopMode.INFINITE
+            ) {
+                val currentAudio = _state.value.currentAudio ?: return
+                onAudioPlayFinished(currentAudio.id)
+                onAudioSequenceCompleted(currentAudio)
+                _state.update { it.copy(currentLoopIteration = it.currentLoopIteration + 1) }
             }
         }
 
@@ -304,9 +320,12 @@ class AudioPlayerManager(
         val currentAudio = snapshot.currentAudio ?: return
         val target = snapshot.loopMode.targetCount
 
-        // Only mark track completed once all required loop repetitions finish
+        // Every full playthrough counts as +1 repetition
+        onAudioPlayFinished(currentAudio.id)
+
+        // Mark track completed in sequence once all required loop repetitions finish
         if (target != null && snapshot.currentLoopIteration >= target) {
-            onAudioCompleted(currentAudio.id)
+            onAudioSequenceCompleted(currentAudio)
         }
 
         val action = LoopRepeatTracker.onTrackEnded(

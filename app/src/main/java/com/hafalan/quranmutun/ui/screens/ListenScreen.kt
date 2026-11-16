@@ -120,6 +120,14 @@ fun ListenScreen(
     val completedCount = remember(activePlaylist, prefs.completedAudioIds) {
         activePlaylist.count { it.id in prefs.completedAudioIds }
     }
+    val totalQuranPlays = remember(audios, prefs.audioPlayCounts) {
+        audios.filter { it.targetType == AudioTargetType.QURAN }
+            .sumOf { prefs.audioPlayCounts[it.id] ?: 0 }
+    }
+    val totalMutunPlays = remember(audios, prefs.audioPlayCounts) {
+        audios.filter { it.targetType == AudioTargetType.MUTUN }
+            .sumOf { prefs.audioPlayCounts[it.id] ?: 0 }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -208,6 +216,77 @@ fun ListenScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = EmeraldPrimary
                             )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Catatan Pengulangan Muraja'ah",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "Al-Qur'an",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${prefs.quranCycleCount}x khatam urutan",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${totalQuranPlays}x total putar surah",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "Mutun Ilmiah",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${prefs.mutunCycleCount}x khatam urutan",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${totalMutunPlays}x total putar mutun",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -377,6 +456,7 @@ fun ListenScreen(
                     } ?: "Mutun"
                     AudioTargetType.GENERAL -> "Audio Muraja'ah"
                 }
+                val playCount = prefs.audioPlayCounts[audio.id] ?: 0
                 val lockStatus = when {
                     !isUnlocked -> "Terkunci (selesaikan #${index} dulu)"
                     isCompleted -> "Selesai"
@@ -387,6 +467,7 @@ fun ListenScreen(
                     append(targetSubtitle)
                     append(" • ")
                     append(lockStatus)
+                    append(" • Diulang ${playCount}x")
                 }
                 DriveAudioRow(
                     audio = audio,

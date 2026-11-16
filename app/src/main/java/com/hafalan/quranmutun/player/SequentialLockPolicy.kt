@@ -64,4 +64,16 @@ object SequentialLockPolicy {
         if (currentIndex <= 0 || currentIndex !in orderedPlaylist.indices) return false
         return isUnlocked(orderedPlaylist, currentIndex - 1, completedAudioIds)
     }
+
+    fun shouldIncrementCycleOnCompletion(
+        orderedPlaylist: List<DriveAudioEntity>,
+        completedBefore: Set<Long>,
+        justCompletedAudioId: Long
+    ): Boolean {
+        if (orderedPlaylist.isEmpty()) return false
+        if (justCompletedAudioId in completedBefore) return false
+        if (orderedPlaylist.none { it.id == justCompletedAudioId }) return false
+        val completedAfter = completedBefore + justCompletedAudioId
+        return orderedPlaylist.all { it.id in completedAfter }
+    }
 }

@@ -499,6 +499,11 @@ class MainViewModel(
         _toastMessage.tryEmit("Urutan ${targetType.labelId} dikunci ulang dari awal")
     }
 
+    fun resetRepetitionStats() {
+        userPreferences.resetAllRepetitionStats()
+        _toastMessage.tryEmit("Catatan jumlah pengulangan direset")
+    }
+
     fun togglePlayPause() = playerManager.togglePlayPause()
     fun setPlaybackSpeed(speed: Float) = playerManager.setPlaybackSpeed(speed)
     fun setLoopMode(loopMode: LoopMode) = playerManager.setLoopMode(loopMode)

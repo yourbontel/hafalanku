@@ -209,12 +209,14 @@ fun AudioLibraryScreen(
                         } ?: "Mutun"
                         AudioTargetType.GENERAL -> "Umum"
                     }
+                    val playCount = prefs.audioPlayCounts[audio.id] ?: 0
                     val subtitle = buildString {
                         append(targetName)
                         if (audio.reciterOrSource.isNotBlank()) {
                             append(" • ")
                             append(audio.reciterOrSource)
                         }
+                        append(" • Diulang ${playCount}x")
                     }
                     val categoryQueue = when (audio.targetType) {
                         AudioTargetType.QURAN -> orderedQuran
