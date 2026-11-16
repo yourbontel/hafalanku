@@ -243,7 +243,7 @@ class MainViewModel(
 
         val folderResult = parsedResults.filterIsInstance<DriveUrlParseResult.Folder>().firstOrNull()
         if (folderResult != null && parsedResults.size == 1) {
-            importDriveFolder(
+            fetchAndSaveDriveFolder(
                 folderId = folderResult.folderId,
                 reciterOrSource = reciterOrSource,
                 targetType = targetType,
@@ -285,7 +285,7 @@ class MainViewModel(
     ) {
         when (val parsed = GoogleDriveLinkParser.parseSingle(folderInput)) {
             is DriveUrlParseResult.Folder -> {
-                importDriveFolder(
+                fetchAndSaveDriveFolder(
                     folderId = parsed.folderId,
                     reciterOrSource = reciterOrSource,
                     targetType = targetType,
@@ -314,7 +314,7 @@ class MainViewModel(
         }
     }
 
-    private fun importDriveFolder(
+    private fun fetchAndSaveDriveFolder(
         folderId: String,
         reciterOrSource: String,
         targetType: AudioTargetType,
