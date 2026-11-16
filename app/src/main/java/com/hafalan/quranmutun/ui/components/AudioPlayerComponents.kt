@@ -35,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,14 +43,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hafalan.quranmutun.data.model.LoopMode
 import com.hafalan.quranmutun.player.AudioPlayerState
+import com.hafalan.quranmutun.player.PlaybackProgressState
+import kotlinx.coroutines.flow.StateFlow
 
 private val SpeedOptions = listOf(0.75f, 1.0f, 1.25f, 1.5f)
 
 @Composable
 fun MiniAudioPlayerBar(
     state: AudioPlayerState,
+    progressFlow: StateFlow<PlaybackProgressState>,
     onExpand: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onCycleLoop: () -> Unit,
@@ -57,8 +62,9 @@ fun MiniAudioPlayerBar(
     modifier: Modifier = Modifier
 ) {
     val audio = state.currentAudio ?: return
-    val progress = if (state.durationMs > 0L) {
-        (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
+    val progressState by progressFlow.collectAsStateWithLifecycle()
+    val progress = if (progressState.durationMs > 0L) {
+        (progressState.positionMs.toFloat() / progressState.durationMs).coerceIn(0f, 1f)
     } else 0f
 
     Surface(
@@ -117,10 +123,10 @@ fun MiniAudioPlayerBar(
                         overflow = TextOverflow.Ellipsis
                     )
                     val meta = buildString {
-                        append(formatDuration(state.positionMs))
-                        if (state.durationMs > 0L) {
+                        append(formatDuration(progressState.positionMs))
+                        if (progressState.durationMs > 0L) {
                             append(" / ")
-                            append(formatDuration(state.durationMs))
+                            append(formatDuration(progressState.durationMs))
                         }
                         append(" • ${state.playbackSpeed}x")
                         val target = state.loopMode.targetCount
@@ -176,6 +182,7 @@ fun MiniAudioPlayerBar(
 @Composable
 fun FullAudioPlayerSheet(
     state: AudioPlayerState,
+    progressFlow: StateFlow<PlaybackProgressState>,
     canSkipPrevious: Boolean,
     canSkipNext: Boolean,
     onDismiss: () -> Unit,
@@ -186,6 +193,7 @@ fun FullAudioPlayerSheet(
     onNext: () -> Unit
 ) {
     val audio = state.currentAudio ?: return
+    val progressState by progressFlow.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -244,8 +252,8 @@ fun FullAudioPlayerSheet(
             }
 
             Spacer(modifier = Modifier.height(18.dp))
-            val progress = if (state.durationMs > 0L) {
-                (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
+            val progress = if (progressState.durationMs > 0L) {
+                (progressState.positionMs.toFloat() / progressState.durationMs).coerceIn(0f, 1f)
             } else 0f
             LinearProgressIndicator(
                 progress = { progress },
@@ -262,7 +270,7 @@ fun FullAudioPlayerSheet(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = formatDuration(state.positionMs),
+                    text = formatDuration(progressState.positionMs),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -289,7 +297,7 @@ fun FullAudioPlayerSheet(
                     )
                 }
                 Text(
-                    text = if (state.durationMs > 0L) formatDuration(state.durationMs) else "--:--",
+                    text = if (progressState.durationMs > 0L) formatDuration(progressState.durationMs) else "--:--",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -33,7 +33,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = if (customDebugKeystore.exists()) {
+                signingConfigs.getByName("debugConfig")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -85,6 +91,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.database)
+    implementation(libs.androidx.media3.datasource)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)
 

@@ -65,6 +65,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hafalan.quranmutun.data.local.DriveAudioEntity
 import com.hafalan.quranmutun.data.local.ListeningPreferences
 import com.hafalan.quranmutun.data.local.MutunItemEntity
@@ -72,11 +73,13 @@ import com.hafalan.quranmutun.data.local.SurahProgressEntity
 import com.hafalan.quranmutun.data.model.AudioTargetType
 import com.hafalan.quranmutun.data.model.LoopMode
 import com.hafalan.quranmutun.player.AudioPlayerState
+import com.hafalan.quranmutun.player.PlaybackProgressState
 import com.hafalan.quranmutun.player.SequentialLockPolicy
 import com.hafalan.quranmutun.ui.components.DriveAudioRow
 import com.hafalan.quranmutun.ui.components.formatDuration
 import com.hafalan.quranmutun.ui.theme.EmeraldLight
 import com.hafalan.quranmutun.ui.theme.EmeraldPrimary
+import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 fun ListenScreen(
@@ -84,7 +87,10 @@ fun ListenScreen(
     surahs: List<SurahProgressEntity>,
     mutunItems: List<MutunItemEntity>,
     prefs: ListeningPreferences,
-    audioState: AudioPlayerState,
+    activeAudioId: Long?,
+    isAudioPlaying: Boolean,
+    loopMode: LoopMode,
+    playbackSpeed: Float,
     onPlayAudio: (DriveAudioEntity, List<DriveAudioEntity>) -> Unit,
     onPlayOrderedCategory: (AudioTargetType) -> Unit,
     onResetSequence: (AudioTargetType) -> Unit,
@@ -339,7 +345,7 @@ fun ListenScreen(
                         )
                         LoopMode.entries.forEach { mode ->
                             FilterChip(
-                                selected = audioState.loopMode == mode,
+                                selected = loopMode == mode,
                                 onClick = { onSetLoopMode(mode) },
                                 label = { Text(mode.label) }
                             )
@@ -352,7 +358,7 @@ fun ListenScreen(
                         )
                         listOf(0.75f, 1.0f, 1.25f, 1.5f).forEach { speed ->
                             FilterChip(
-                                selected = audioState.playbackSpeed == speed,
+                                selected = playbackSpeed == speed,
                                 onClick = { onSetSpeed(speed) },
                                 label = { Text("${speed}x") }
                             )
@@ -440,7 +446,11 @@ fun ListenScreen(
                 }
             }
         } else {
-            itemsIndexed(activePlaylist, key = { _, audio -> audio.id }) { index, audio ->
+            itemsIndexed(
+                items = activePlaylist,
+                key = { _, audio -> audio.id },
+                contentType = { _, _ -> "audio_row" }
+            ) { index, audio ->
                 val isUnlocked = SequentialLockPolicy.isUnlocked(
                     activePlaylist,
                     index,
@@ -473,8 +483,8 @@ fun ListenScreen(
                 }
                 DriveAudioRow(
                     audio = audio,
-                    isCurrentTrack = audioState.currentAudio?.id == audio.id,
-                    isPlaying = audioState.isPlaying,
+                    isCurrentTrack = activeAudioId == audio.id,
+                    isPlaying = isAudioPlaying,
                     onPlayClick = { onPlayAudio(audio, activePlaylist) },
                     onDeleteClick = { onDeleteAudio(audio) },
                     subtitleOverride = subtitle,
@@ -489,6 +499,7 @@ fun ListenScreen(
 @Composable
 fun DrivingModeOverlay(
     audioState: AudioPlayerState,
+    progressFlow: StateFlow<PlaybackProgressState>,
     canSkipPrevious: Boolean,
     canSkipNext: Boolean,
     keepScreenOn: Boolean,
@@ -499,6 +510,7 @@ fun DrivingModeOverlay(
     onCycleLoop: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val progressState by progressFlow.collectAsStateWithLifecycle()
     val context = LocalContext.current
     DisposableEffect(keepScreenOn) {
         val window = (context as? Activity)?.window
@@ -609,8 +621,8 @@ fun DrivingModeOverlay(
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
-                    val progress = if (audioState.durationMs > 0L) {
-                        (audioState.positionMs.toFloat() / audioState.durationMs).coerceIn(0f, 1f)
+                    val progress = if (progressState.durationMs > 0L) {
+                        (progressState.positionMs.toFloat() / progressState.durationMs).coerceIn(0f, 1f)
                     } else 0f
                     LinearProgressIndicator(
                         progress = { progress },
@@ -627,7 +639,7 @@ fun DrivingModeOverlay(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = formatDuration(audioState.positionMs),
+                            text = formatDuration(progressState.positionMs),
                             color = Color.White.copy(alpha = 0.75f),
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -637,7 +649,7 @@ fun DrivingModeOverlay(
                             style = MaterialTheme.typography.labelMedium
                         )
                         Text(
-                            text = if (audioState.durationMs > 0L) formatDuration(audioState.durationMs) else "--:--",
+                            text = if (progressState.durationMs > 0L) formatDuration(progressState.durationMs) else "--:--",
                             color = Color.White.copy(alpha = 0.75f),
                             style = MaterialTheme.typography.bodyMedium
                         )

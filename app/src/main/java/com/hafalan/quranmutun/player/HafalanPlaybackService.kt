@@ -8,6 +8,8 @@ import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
@@ -25,12 +27,28 @@ class HafalanPlaybackService : MediaSessionService() {
 
         val httpFactory = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(15_000)
+            .setConnectTimeoutMs(12_000)
+            .setReadTimeoutMs(12_000)
             .setUserAgent("Mozilla/5.0 (Android) HafalanQuranMutun/1.0")
 
+        val cacheDataSourceFactory = CacheDataSource.Factory()
+            .setCache(PlayerCacheManager.getCache(this))
+            .setUpstreamDataSourceFactory(httpFactory)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+        // Start playback quickly (600ms initial buffer) and buffer ahead cleanly
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                15_000,
+                60_000,
+                600,
+                1_500
+            )
+            .build()
+
         val player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(cacheDataSourceFactory))
+            .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)

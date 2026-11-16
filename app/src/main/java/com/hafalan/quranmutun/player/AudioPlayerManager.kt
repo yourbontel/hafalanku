@@ -32,13 +32,16 @@ data class AudioPlayerState(
     val playlist: List<DriveAudioEntity> = emptyList(),
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
-    val positionMs: Long = 0L,
-    val durationMs: Long = 0L,
     val playbackSpeed: Float = 1.0f,
     val loopMode: LoopMode = LoopMode.ONCE,
     val currentLoopIteration: Int = 1,
     val autoAdvancePlaylist: Boolean = true,
     val errorMessage: String? = null
+)
+
+data class PlaybackProgressState(
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L
 )
 
 class AudioPlayerManager(
@@ -64,6 +67,9 @@ class AudioPlayerManager(
     private val _state = MutableStateFlow(AudioPlayerState())
     val state: StateFlow<AudioPlayerState> = _state.asStateFlow()
 
+    private val _progressState = MutableStateFlow(PlaybackProgressState())
+    val progressState: StateFlow<PlaybackProgressState> = _progressState.asStateFlow()
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _state.update { it.copy(isPlaying = isPlaying) }
@@ -83,13 +89,11 @@ class AudioPlayerManager(
                 }
                 Player.STATE_READY -> {
                     val dur = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
-                    _state.update {
-                        it.copy(
-                            isBuffering = false,
-                            durationMs = dur,
-                            positionMs = player.currentPosition.coerceAtLeast(0L)
-                        )
-                    }
+                    _state.update { it.copy(isBuffering = false) }
+                    _progressState.value = PlaybackProgressState(
+                        positionMs = player.currentPosition.coerceAtLeast(0L),
+                        durationMs = dur
+                    )
                 }
                 Player.STATE_ENDED -> {
                     handleTrackEnded()
@@ -156,7 +160,7 @@ class AudioPlayerManager(
         val pos = if (player != null && player.playbackState != Player.STATE_ENDED) {
             player.currentPosition.coerceAtLeast(0L)
         } else {
-            _state.value.positionMs.coerceAtLeast(0L)
+            _progressState.value.positionMs.coerceAtLeast(0L)
         }
         if (pos > 0L) {
             onSavePosition(audio.id, pos)
@@ -175,12 +179,14 @@ class AudioPlayerManager(
                 playlist = playlist,
                 isPlaying = false,
                 isBuffering = false,
-                positionMs = savedPositionMs.coerceAtLeast(0L),
-                durationMs = 0L,
                 currentLoopIteration = 1,
                 errorMessage = null
             )
         }
+        _progressState.value = PlaybackProgressState(
+            positionMs = savedPositionMs.coerceAtLeast(0L),
+            durationMs = 0L
+        )
     }
 
     private fun ensureServiceConnected() {
@@ -222,17 +228,12 @@ class AudioPlayerManager(
                 currentAudio = audio,
                 playlist = playlist,
                 isBuffering = true,
-                positionMs = resumeMs,
-                durationMs = 0L,
                 currentLoopIteration = 1,
                 errorMessage = null
             )
         }
-        if (resumeMs > 0L) {
-            onSavePosition(audio.id, resumeMs)
-        } else {
-            onSavePosition(audio.id, 0L)
-        }
+        _progressState.value = PlaybackProgressState(positionMs = resumeMs, durationMs = 0L)
+        onSavePosition(audio.id, resumeMs)
 
         ensureServiceConnected()
         val player = exoPlayer
@@ -363,6 +364,7 @@ class AudioPlayerManager(
                 autoAdvancePlaylist = it.autoAdvancePlaylist
             )
         }
+        _progressState.value = PlaybackProgressState()
     }
 
     fun clearError() {
@@ -383,13 +385,9 @@ class AudioPlayerManager(
         val currentAudio = snapshot.currentAudio ?: return
         val target = snapshot.loopMode.targetCount
 
-        // Clear saved mid-track position since this audio completed cleanly
         onClearPosition(currentAudio.id)
-
-        // Every full playthrough counts as +1 repetition
         onAudioPlayFinished(currentAudio.id)
 
-        // Mark track completed in sequence once all required loop repetitions finish
         if (target != null && snapshot.currentLoopIteration >= target) {
             onAudioSequenceCompleted(currentAudio)
         }
@@ -402,7 +400,8 @@ class AudioPlayerManager(
         )
         when (action) {
             is LoopNextAction.ReplayCurrent -> {
-                _state.update { it.copy(currentLoopIteration = action.nextIteration, positionMs = 0L) }
+                _state.update { it.copy(currentLoopIteration = action.nextIteration) }
+                _progressState.update { it.copy(positionMs = 0L) }
                 player.seekTo(0L)
                 player.play()
             }
@@ -414,10 +413,10 @@ class AudioPlayerManager(
                     it.copy(
                         isPlaying = false,
                         isBuffering = false,
-                        currentLoopIteration = 1,
-                        positionMs = 0L
+                        currentLoopIteration = 1
                     )
                 }
+                _progressState.update { it.copy(positionMs = 0L) }
             }
         }
     }
@@ -430,22 +429,20 @@ class AudioPlayerManager(
                 val player = exoPlayer
                 if (player != null) {
                     val pos = player.currentPosition.coerceAtLeast(0L)
-                    val dur = player.duration.takeIf { it != C.TIME_UNSET } ?: _state.value.durationMs
-                    _state.update {
-                        it.copy(
-                            positionMs = pos,
-                            durationMs = dur
-                        )
-                    }
+                    val dur = player.duration.takeIf { it != C.TIME_UNSET } ?: _progressState.value.durationMs
+                    _progressState.value = PlaybackProgressState(
+                        positionMs = pos,
+                        durationMs = dur
+                    )
                     tickerSaveCounter++
-                    if (tickerSaveCounter >= 5) {
+                    if (tickerSaveCounter >= 4) {
                         tickerSaveCounter = 0
                         _state.value.currentAudio?.let { audio ->
                             if (pos > 0L) onSavePosition(audio.id, pos)
                         }
                     }
                 }
-                delay(400L)
+                delay(500L)
             }
         }
     }

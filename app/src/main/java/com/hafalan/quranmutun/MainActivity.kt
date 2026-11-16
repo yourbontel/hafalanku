@@ -148,6 +148,7 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
                 if (audioState.currentAudio != null) {
                     MiniAudioPlayerBar(
                         state = audioState,
+                        progressFlow = viewModel.audioProgressState,
                         onExpand = { showFullPlayerSheet = true },
                         onTogglePlayPause = viewModel::togglePlayPause,
                         onCycleLoop = viewModel::cycleLoopMode,
@@ -181,7 +182,10 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
                         surahs = uiState.surahs,
                         mutunItems = uiState.mutunItems,
                         prefs = uiState.listeningPrefs,
-                        audioState = audioState,
+                        activeAudioId = audioState.currentAudio?.id,
+                        isAudioPlaying = audioState.isPlaying,
+                        loopMode = audioState.loopMode,
+                        playbackSpeed = audioState.playbackSpeed,
                         onPlayAudio = viewModel::playAudio,
                         onPlayOrderedCategory = viewModel::playOrderedCategory,
                         onResetSequence = viewModel::resetSequenceProgress,
@@ -198,7 +202,8 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
                         mutunItems = uiState.mutunItems,
                         audios = uiState.audios,
                         prefs = uiState.listeningPrefs,
-                        audioState = audioState,
+                        activeAudioId = audioState.currentAudio?.id,
+                        isAudioPlaying = audioState.isPlaying,
                         onSetHafalanRange = viewModel::setHafalanRange,
                         onAddAudioForSurah = { surah ->
                             addAudioConfig = AddAudioDialogConfig(
@@ -235,7 +240,8 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
                         surahs = uiState.surahs,
                         mutunItems = uiState.mutunItems,
                         prefs = uiState.listeningPrefs,
-                        audioState = audioState,
+                        activeAudioId = audioState.currentAudio?.id,
+                        isAudioPlaying = audioState.isPlaying,
                         onOpenAddAudio = { addAudioConfig = AddAudioDialogConfig() },
                         onPlayAudio = viewModel::playAudio,
                         onDeleteAudio = viewModel::deleteAudio
@@ -248,6 +254,7 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
     if (showFullPlayerSheet && audioState.currentAudio != null) {
         FullAudioPlayerSheet(
             state = audioState,
+            progressFlow = viewModel.audioProgressState,
             canSkipPrevious = canSkipPrevious,
             canSkipNext = canSkipNext,
             onDismiss = { showFullPlayerSheet = false },
@@ -262,6 +269,7 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
     if (showDrivingMode) {
         DrivingModeOverlay(
             audioState = audioState,
+            progressFlow = viewModel.audioProgressState,
             canSkipPrevious = canSkipPrevious,
             canSkipNext = canSkipNext,
             keepScreenOn = uiState.listeningPrefs.keepScreenOnInDrivingMode,

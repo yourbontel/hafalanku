@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Edit
@@ -31,15 +33,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,17 +59,17 @@ import com.hafalan.quranmutun.data.local.ListeningPreferences
 import com.hafalan.quranmutun.data.local.MutunItemEntity
 import com.hafalan.quranmutun.data.local.SurahProgressEntity
 import com.hafalan.quranmutun.data.model.AudioTargetType
-import com.hafalan.quranmutun.player.AudioPlayerState
 import com.hafalan.quranmutun.player.SequentialLockPolicy
+import com.hafalan.quranmutun.ui.components.formatDuration
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TargetHafalanScreen(
     surahs: List<SurahProgressEntity>,
     mutunItems: List<MutunItemEntity>,
     audios: List<DriveAudioEntity>,
     prefs: ListeningPreferences,
-    audioState: AudioPlayerState,
+    activeAudioId: Long?,
+    isAudioPlaying: Boolean,
     onSetHafalanRange: (Int, Int) -> Unit,
     onAddAudioForSurah: (SurahProgressEntity) -> Unit,
     onAddAudioForMutun: (MutunItemEntity) -> Unit,
@@ -81,8 +79,8 @@ fun TargetHafalanScreen(
     onResetStats: () -> Unit,
     onPlayAudio: (DriveAudioEntity, List<DriveAudioEntity>) -> Unit
 ) {
-    var fromExpanded by remember { mutableStateOf(false) }
-    var toExpanded by remember { mutableStateOf(false) }
+    var pickingFromSurah by remember { mutableStateOf(false) }
+    var pickingToSurah by remember { mutableStateOf(false) }
     var editingMutun by remember { mutableStateOf<MutunItemEntity?>(null) }
     var showAddMutunDialog by remember { mutableStateOf(false) }
     var showResetStatsDialog by remember { mutableStateOf(false) }
@@ -196,76 +194,46 @@ fun TargetHafalanScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        ExposedDropdownMenuBox(
-                            expanded = fromExpanded,
-                            onExpandedChange = { fromExpanded = !fromExpanded },
-                            modifier = Modifier.weight(1f)
+                        OutlinedButton(
+                            onClick = { pickingFromSurah = true },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            OutlinedTextField(
-                                value = fromSurah?.let { "${it.surahNumber}. ${it.nameLatin}" }
-                                    ?: "Surah ${prefs.minHafalanSurah}",
-                                onValueChange = {},
-                                readOnly = true,
-                                singleLine = true,
-                                label = { Text("Dari Surah") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = fromExpanded)
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                            )
-                            ExposedDropdownMenu(
-                                expanded = fromExpanded,
-                                onDismissRequest = { fromExpanded = false }
-                            ) {
-                                surahs.forEach { s ->
-                                    DropdownMenuItem(
-                                        text = { Text("${s.surahNumber}. ${s.nameLatin}") },
-                                        onClick = {
-                                            val newMax = maxOf(s.surahNumber, prefs.maxHafalanSurah)
-                                            onSetHafalanRange(s.surahNumber, newMax)
-                                            fromExpanded = false
-                                        }
-                                    )
-                                }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Dari Surah",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = fromSurah?.let { "${it.surahNumber}. ${it.nameLatin}" }
+                                        ?: "Surah ${prefs.minHafalanSurah}",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
+                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
                         }
 
-                        ExposedDropdownMenuBox(
-                            expanded = toExpanded,
-                            onExpandedChange = { toExpanded = !toExpanded },
-                            modifier = Modifier.weight(1f)
+                        OutlinedButton(
+                            onClick = { pickingToSurah = true },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            OutlinedTextField(
-                                value = toSurah?.let { "${it.surahNumber}. ${it.nameLatin}" }
-                                    ?: "Surah ${prefs.maxHafalanSurah}",
-                                onValueChange = {},
-                                readOnly = true,
-                                singleLine = true,
-                                label = { Text("Sampai Surah") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = toExpanded)
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                            )
-                            ExposedDropdownMenu(
-                                expanded = toExpanded,
-                                onDismissRequest = { toExpanded = false }
-                            ) {
-                                surahs.forEach { s ->
-                                    DropdownMenuItem(
-                                        text = { Text("${s.surahNumber}. ${s.nameLatin}") },
-                                        onClick = {
-                                            val newMin = minOf(prefs.minHafalanSurah, s.surahNumber)
-                                            onSetHafalanRange(newMin, s.surahNumber)
-                                            toExpanded = false
-                                        }
-                                    )
-                                }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Sampai Surah",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = toSurah?.let { "${it.surahNumber}. ${it.nameLatin}" }
+                                        ?: "Surah ${prefs.maxHafalanSurah}",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
+                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
                         }
                     }
                 }
@@ -281,13 +249,17 @@ fun TargetHafalanScreen(
             )
         }
 
-        items(targetSurahs, key = { "target-surah-${it.surahNumber}" }) { surah ->
+        items(
+            items = targetSurahs,
+            key = { "target-surah-${it.surahNumber}" },
+            contentType = { "target_surah" }
+        ) { surah ->
             val surahAudios = audiosBySurah[surah.surahNumber].orEmpty()
             val firstAudio = surahAudios.firstOrNull()
             val firstIdx = firstAudio?.let { audio -> orderedQuran.indexOfFirst { it.id == audio.id } } ?: -1
             val isUnlocked = firstIdx >= 0 && SequentialLockPolicy.isUnlocked(orderedQuran, firstIdx, prefs.completedAudioIds)
             val isCompleted = firstAudio != null && firstAudio.id in prefs.completedAudioIds
-            val isPlayingThis = firstAudio != null && audioState.currentAudio?.id == firstAudio.id && audioState.isPlaying
+            val isPlayingThis = firstAudio != null && activeAudioId == firstAudio.id && isAudioPlaying
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -336,7 +308,7 @@ fun TargetHafalanScreen(
                             text = if (surahAudios.isEmpty()) {
                                 "${surah.totalVerses} ayat • Diulang ${surahPlayCount}x"
                             } else if (savedSurahPos > 0L) {
-                                "${surahAudios.size} audio • Lanjut ${com.hafalan.quranmutun.ui.components.formatDuration(savedSurahPos)} • Diulang ${surahPlayCount}x"
+                                "${surahAudios.size} audio • Lanjut ${formatDuration(savedSurahPos)} • Diulang ${surahPlayCount}x"
                             } else {
                                 "${surahAudios.size} audio Drive • Diulang ${surahPlayCount}x"
                             },
@@ -409,13 +381,17 @@ fun TargetHafalanScreen(
             }
         }
 
-        items(mutunItems, key = { "target-mutun-${it.id}" }) { mutun ->
+        items(
+            items = mutunItems,
+            key = { "target-mutun-${it.id}" },
+            contentType = { "target_mutun" }
+        ) { mutun ->
             val mutunAudios = audiosByMutun[mutun.id].orEmpty()
             val firstAudio = mutunAudios.firstOrNull()
             val firstIdx = firstAudio?.let { audio -> orderedMutun.indexOfFirst { it.id == audio.id } } ?: -1
             val isUnlocked = firstIdx >= 0 && SequentialLockPolicy.isUnlocked(orderedMutun, firstIdx, prefs.completedAudioIds)
             val isCompleted = firstAudio != null && firstAudio.id in prefs.completedAudioIds
-            val isPlayingThis = firstAudio != null && audioState.currentAudio?.id == firstAudio.id && audioState.isPlaying
+            val isPlayingThis = firstAudio != null && activeAudioId == firstAudio.id && isAudioPlaying
 
             Card(
                 modifier = Modifier
@@ -449,7 +425,7 @@ fun TargetHafalanScreen(
                             text = if (mutunAudios.isEmpty()) {
                                 "${mutun.category} • Diulang ${mutunPlayCount}x"
                             } else if (savedMutunPos > 0L) {
-                                "${mutun.category} • Lanjut ${com.hafalan.quranmutun.ui.components.formatDuration(savedMutunPos)} • Diulang ${mutunPlayCount}x"
+                                "${mutun.category} • Lanjut ${formatDuration(savedMutunPos)} • Diulang ${mutunPlayCount}x"
                             } else {
                                 "${mutun.category} • ${mutunAudios.size} audio • Diulang ${mutunPlayCount}x"
                             },
@@ -553,6 +529,88 @@ fun TargetHafalanScreen(
             }
         )
     }
+
+    if (pickingFromSurah) {
+        SurahPickerDialog(
+            title = "Pilih Dari Surah",
+            surahs = surahs,
+            selectedNumber = prefs.minHafalanSurah,
+            onDismiss = { pickingFromSurah = false },
+            onSelect = { num ->
+                val newMax = maxOf(num, prefs.maxHafalanSurah)
+                onSetHafalanRange(num, newMax)
+                pickingFromSurah = false
+            }
+        )
+    }
+
+    if (pickingToSurah) {
+        SurahPickerDialog(
+            title = "Pilih Sampai Surah",
+            surahs = surahs,
+            selectedNumber = prefs.maxHafalanSurah,
+            onDismiss = { pickingToSurah = false },
+            onSelect = { num ->
+                val newMin = minOf(prefs.minHafalanSurah, num)
+                onSetHafalanRange(newMin, num)
+                pickingToSurah = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun SurahPickerDialog(
+    title: String,
+    surahs: List<SurahProgressEntity>,
+    selectedNumber: Int,
+    onDismiss: () -> Unit,
+    onSelect: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+            ) {
+                items(
+                    items = surahs,
+                    key = { it.surahNumber },
+                    contentType = { "surah_picker" }
+                ) { s ->
+                    val isSelected = s.surahNumber == selectedNumber
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(s.surahNumber) }
+                            .padding(vertical = 10.dp, horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${s.surahNumber}. ${s.nameLatin}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = s.nameArabic,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Tutup")
+            }
+        }
+    )
 }
 
 @Composable

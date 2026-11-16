@@ -21,6 +21,7 @@ import com.hafalan.quranmutun.data.model.MemorizationStatus
 import com.hafalan.quranmutun.data.repository.HafalanRepository
 import com.hafalan.quranmutun.player.AudioPlayerManager
 import com.hafalan.quranmutun.player.AudioPlayerState
+import com.hafalan.quranmutun.player.PlaybackProgressState
 import com.hafalan.quranmutun.player.SequentialLockPolicy
 import com.hafalan.quranmutun.ui.state.DashboardSummary
 import com.hafalan.quranmutun.ui.state.ProgressSummaryCalculator
@@ -58,6 +59,7 @@ class MainViewModel(
     val toastMessage = _toastMessage.asSharedFlow()
 
     val audioState: StateFlow<AudioPlayerState> = playerManager.state
+    val audioProgressState: StateFlow<PlaybackProgressState> = playerManager.progressState
 
     val uiState: StateFlow<MainUiState> = combine(
         repository.observeSurahs(),

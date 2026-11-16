@@ -40,7 +40,6 @@ import com.hafalan.quranmutun.data.local.ListeningPreferences
 import com.hafalan.quranmutun.data.local.MutunItemEntity
 import com.hafalan.quranmutun.data.local.SurahProgressEntity
 import com.hafalan.quranmutun.data.model.AudioTargetType
-import com.hafalan.quranmutun.player.AudioPlayerState
 import com.hafalan.quranmutun.player.SequentialLockPolicy
 import com.hafalan.quranmutun.ui.components.DriveAudioRow
 
@@ -50,7 +49,8 @@ fun AudioLibraryScreen(
     surahs: List<SurahProgressEntity>,
     mutunItems: List<MutunItemEntity>,
     prefs: ListeningPreferences,
-    audioState: AudioPlayerState,
+    activeAudioId: Long?,
+    isAudioPlaying: Boolean,
     onOpenAddAudio: () -> Unit,
     onPlayAudio: (DriveAudioEntity, List<DriveAudioEntity>) -> Unit,
     onDeleteAudio: (DriveAudioEntity) -> Unit
@@ -199,7 +199,11 @@ fun AudioLibraryScreen(
                     }
                 }
             } else {
-                items(filteredAudios, key = { it.id }) { audio ->
+                items(
+                    items = filteredAudios,
+                    key = { it.id },
+                    contentType = { "library_audio" }
+                ) { audio ->
                     val targetName = when (audio.targetType) {
                         AudioTargetType.QURAN -> audio.surahNumber?.let { num ->
                             surahMap[num]?.let { "Surah ${it.surahNumber}. ${it.nameLatin}" }
@@ -233,8 +237,8 @@ fun AudioLibraryScreen(
 
                     DriveAudioRow(
                         audio = audio,
-                        isCurrentTrack = audioState.currentAudio?.id == audio.id,
-                        isPlaying = audioState.isPlaying,
+                        isCurrentTrack = activeAudioId == audio.id,
+                        isPlaying = isAudioPlaying,
                         onPlayClick = { onPlayAudio(audio, categoryQueue) },
                         onDeleteClick = { onDeleteAudio(audio) },
                         subtitleOverride = subtitle,

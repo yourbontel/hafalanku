@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.withTransaction
 import com.hafalan.quranmutun.data.seed.MutunSeedCatalog
 import com.hafalan.quranmutun.data.seed.QuranCatalog
 
@@ -25,17 +26,19 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun driveAudioDao(): DriveAudioDao
 
     suspend fun ensureSeeded() {
-        val surahCount = surahDao().count()
-        if (surahCount == 0) {
-            surahDao().insertAll(QuranCatalog.allSurahs)
-        }
-        val mutunCount = mutunDao().count()
-        if (mutunCount == 0) {
-            MutunSeedCatalog.defaults.forEach { template ->
-                val id = mutunDao().insertMutun(template.item)
-                val sections = MutunSeedCatalog.buildSections(id, template)
-                if (sections.isNotEmpty()) {
-                    mutunDao().insertSections(sections)
+        withTransaction {
+            val surahCount = surahDao().count()
+            if (surahCount == 0) {
+                surahDao().insertAll(QuranCatalog.allSurahs)
+            }
+            val mutunCount = mutunDao().count()
+            if (mutunCount == 0) {
+                MutunSeedCatalog.defaults.forEach { template ->
+                    val id = mutunDao().insertMutun(template.item)
+                    val sections = MutunSeedCatalog.buildSections(id, template)
+                    if (sections.isNotEmpty()) {
+                        mutunDao().insertSections(sections)
+                    }
                 }
             }
         }
