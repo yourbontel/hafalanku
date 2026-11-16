@@ -10,13 +10,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoStories
-import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.CloudQueue
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -25,7 +25,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,24 +35,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.hafalan.quranmutun.data.local.MutunItemEntity
-import com.hafalan.quranmutun.data.local.SurahProgressEntity
 import com.hafalan.quranmutun.data.model.AudioTargetType
 import com.hafalan.quranmutun.ui.components.AddDriveAudioDialog
 import com.hafalan.quranmutun.ui.components.FullAudioPlayerSheet
 import com.hafalan.quranmutun.ui.components.MiniAudioPlayerBar
 import com.hafalan.quranmutun.ui.screens.AudioLibraryScreen
-import com.hafalan.quranmutun.ui.screens.DashboardScreen
-import com.hafalan.quranmutun.ui.screens.MutunScreen
-import com.hafalan.quranmutun.ui.screens.QuranScreen
+import com.hafalan.quranmutun.ui.screens.DrivingModeOverlay
+import com.hafalan.quranmutun.ui.screens.ListenScreen
+import com.hafalan.quranmutun.ui.screens.TargetHafalanScreen
 import com.hafalan.quranmutun.ui.theme.HafalanTheme
 import com.hafalan.quranmutun.ui.viewmodel.MainViewModel
 
 private enum class AppTab(val label: String, val title: String, val icon: ImageVector) {
-    DASHBOARD("Beranda", "Hafalan Qur'an & Mutun", Icons.Rounded.Dashboard),
-    QURAN("Al-Qur'an", "Hafalan Al-Qur'an", Icons.Rounded.MenuBook),
-    MUTUN("Mutun", "Hafalan Mutun Ilmiah", Icons.Rounded.AutoStories),
-    AUDIO("Audio", "Audio Google Drive", Icons.Rounded.Headphones)
+    LISTEN("Dengarkan", "Muraja'ah Audio", Icons.Rounded.Headphones),
+    TARGET("Hafalan Saya", "Target Hafalan & Mutun", Icons.Rounded.MenuBook),
+    LIBRARY("Pustaka Drive", "Pustaka Google Drive", Icons.Rounded.CloudQueue)
 }
 
 private data class AddAudioDialogConfig(
@@ -66,7 +62,7 @@ private data class AddAudioDialogConfig(
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels {
         val app = application as HafalanApp
-        MainViewModel.Factory(app.repository, app.audioPlayerManager)
+        MainViewModel.Factory(app.repository, app.audioPlayerManager, app.userPreferences)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,10 +82,9 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val audioState by viewModel.audioState.collectAsStateWithLifecycle()
 
-    var currentTab by remember { mutableStateOf(AppTab.DASHBOARD) }
-    var selectedSurahForDetail by remember { mutableStateOf<SurahProgressEntity?>(null) }
-    var selectedMutunForDetail by remember { mutableStateOf<MutunItemEntity?>(null) }
+    var currentTab by remember { mutableStateOf(AppTab.LISTEN) }
     var showFullPlayerSheet by remember { mutableStateOf(false) }
+    var showDrivingMode by remember { mutableStateOf(false) }
     var addAudioConfig by remember { mutableStateOf<AddAudioDialogConfig?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -143,76 +138,52 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
                 when (currentTab) {
-                    AppTab.DASHBOARD -> DashboardScreen(
-                        uiState = uiState,
-                        onOpenQuranTab = { currentTab = AppTab.QURAN },
-                        onOpenMutunTab = { currentTab = AppTab.MUTUN },
-                        onOpenAudioTab = { currentTab = AppTab.AUDIO },
-                        onSelectSurah = { surah ->
-                            selectedSurahForDetail = surah
-                            currentTab = AppTab.QURAN
-                        },
-                        onSelectMutun = { mutun ->
-                            selectedMutunForDetail = mutun
-                            currentTab = AppTab.MUTUN
-                        },
-                        onMarkSurahReviewed = viewModel::markSurahReviewedToday,
-                        onMarkMutunReviewed = viewModel::markMutunReviewedToday,
-                        onPlayAudio = { audio -> viewModel.playAudio(audio, uiState.audios) }
+                    AppTab.LISTEN -> ListenScreen(
+                        audios = uiState.audios,
+                        surahs = uiState.surahs,
+                        mutunItems = uiState.mutunItems,
+                        prefs = uiState.listeningPrefs,
+                        audioState = audioState,
+                        onPlayAudio = viewModel::playAudio,
+                        onPlayQueueFromStart = viewModel::playQueueFromStart,
+                        onOpenDrivingMode = { showDrivingMode = true },
+                        onOpenAddAudio = { addAudioConfig = AddAudioDialogConfig() },
+                        onSetAutoAdvance = viewModel::setAutoAdvancePlaylist,
+                        onSetLoopMode = viewModel::setLoopMode,
+                        onSetSpeed = viewModel::setPlaybackSpeed,
+                        onDeleteAudio = viewModel::deleteAudio
                     )
 
-                    AppTab.QURAN -> QuranScreen(
+                    AppTab.TARGET -> TargetHafalanScreen(
                         surahs = uiState.surahs,
+                        mutunItems = uiState.mutunItems,
                         audios = uiState.audios,
+                        prefs = uiState.listeningPrefs,
                         audioState = audioState,
-                        selectedSurahForDetail = selectedSurahForDetail,
-                        onSelectSurah = { selectedSurahForDetail = it },
-                        onSaveSurah = viewModel::updateSurahProgress,
-                        onMarkReviewedToday = viewModel::markSurahReviewedToday,
-                        onOpenAddAudioForSurah = { surah ->
+                        onSetHafalanRange = viewModel::setHafalanRange,
+                        onAddAudioForSurah = { surah ->
                             addAudioConfig = AddAudioDialogConfig(
                                 targetType = AudioTargetType.QURAN,
                                 surahNumber = surah.surahNumber,
                                 lockTarget = true
                             )
                         },
-                        onPlayAudio = viewModel::playAudio,
-                        onDeleteAudio = viewModel::deleteAudio
-                    )
-
-                    AppTab.MUTUN -> MutunScreen(
-                        mutunItems = uiState.mutunItems,
-                        sectionsByMutunId = uiState.sectionsByMutunId,
-                        audios = uiState.audios,
-                        audioState = audioState,
-                        selectedMutunForDetail = selectedMutunForDetail,
-                        onSelectMutun = { selectedMutunForDetail = it },
-                        onAddMutun = viewModel::addMutun,
-                        onSaveMutun = viewModel::updateMutunProgress,
-                        onMarkReviewedToday = viewModel::markMutunReviewedToday,
-                        onDeleteMutun = viewModel::deleteMutun,
-                        onAddSection = viewModel::addMutunSection,
-                        onToggleSection = viewModel::toggleMutunSection,
-                        onDeleteSection = viewModel::deleteMutunSection,
-                        onOpenAddAudioForMutun = { item ->
+                        onAddAudioForMutun = { mutun ->
                             addAudioConfig = AddAudioDialogConfig(
                                 targetType = AudioTargetType.MUTUN,
-                                mutunId = item.id,
+                                mutunId = mutun.id,
                                 lockTarget = true
                             )
                         },
-                        onPlayAudio = viewModel::playAudio,
-                        onDeleteAudio = viewModel::deleteAudio
+                        onPlayAudio = viewModel::playAudio
                     )
 
-                    AppTab.AUDIO -> AudioLibraryScreen(
+                    AppTab.LIBRARY -> AudioLibraryScreen(
                         audios = uiState.audios,
                         surahs = uiState.surahs,
                         mutunItems = uiState.mutunItems,
                         audioState = audioState,
-                        onOpenAddAudio = {
-                            addAudioConfig = AddAudioDialogConfig()
-                        },
+                        onOpenAddAudio = { addAudioConfig = AddAudioDialogConfig() },
                         onPlayAudio = viewModel::playAudio,
                         onDeleteAudio = viewModel::deleteAudio
                     )
@@ -232,6 +203,21 @@ private fun HafalanRootScreen(viewModel: MainViewModel) {
             onSetSpeed = viewModel::setPlaybackSpeed,
             onPrevious = viewModel::playPreviousInPlaylist,
             onNext = viewModel::playNextInPlaylist
+        )
+    }
+
+    if (showDrivingMode) {
+        DrivingModeOverlay(
+            audioState = audioState,
+            keepScreenOn = uiState.listeningPrefs.keepScreenOnInDrivingMode,
+            onToggleKeepScreenOn = viewModel::setKeepScreenOnInDrivingMode,
+            onTogglePlayPause = viewModel::togglePlayPause,
+            onPrevious = viewModel::playPreviousInPlaylist,
+            onNext = viewModel::playNextInPlaylist,
+            onSeekBy = viewModel::seekBy,
+            onCycleLoop = viewModel::cycleLoopMode,
+            onSetSpeed = viewModel::setPlaybackSpeed,
+            onDismiss = { showDrivingMode = false }
         )
     }
 

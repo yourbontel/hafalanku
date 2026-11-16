@@ -8,10 +8,13 @@ import com.hafalan.quranmutun.data.drive.DriveUrlParseResult
 import com.hafalan.quranmutun.data.drive.FolderFetchResult
 import com.hafalan.quranmutun.data.drive.GoogleDriveLinkParser
 import com.hafalan.quranmutun.data.drive.ParsedDriveFile
+import com.hafalan.quranmutun.data.drive.SurahFilenameMatcher
 import com.hafalan.quranmutun.data.local.DriveAudioEntity
+import com.hafalan.quranmutun.data.local.ListeningPreferences
 import com.hafalan.quranmutun.data.local.MutunItemEntity
 import com.hafalan.quranmutun.data.local.MutunSectionEntity
 import com.hafalan.quranmutun.data.local.SurahProgressEntity
+import com.hafalan.quranmutun.data.local.UserPreferences
 import com.hafalan.quranmutun.data.model.AudioTargetType
 import com.hafalan.quranmutun.data.model.LoopMode
 import com.hafalan.quranmutun.data.model.MemorizationStatus
@@ -25,7 +28,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -37,12 +39,14 @@ data class MainUiState(
     val sectionsByMutunId: Map<Long, List<MutunSectionEntity>> = emptyMap(),
     val audios: List<DriveAudioEntity> = emptyList(),
     val summary: DashboardSummary = ProgressSummaryCalculator.calculate(emptyList(), emptyList()),
+    val listeningPrefs: ListeningPreferences = ListeningPreferences(),
     val isFetchingFolder: Boolean = false
 )
 
 class MainViewModel(
     private val repository: HafalanRepository,
-    private val playerManager: AudioPlayerManager
+    private val playerManager: AudioPlayerManager,
+    private val userPreferences: UserPreferences
 ) : ViewModel() {
 
     private val _isInitialized = MutableStateFlow(false)
@@ -58,6 +62,7 @@ class MainViewModel(
         repository.observeMutunItems(),
         repository.observeAllMutunSections(),
         repository.observeAudios(),
+        userPreferences.state,
         _isInitialized,
         _isFetchingFolder
     ) { values ->
@@ -69,8 +74,9 @@ class MainViewModel(
         val sections = values[2] as List<MutunSectionEntity>
         @Suppress("UNCHECKED_CAST")
         val audios = values[3] as List<DriveAudioEntity>
-        val initialized = values[4] as Boolean
-        val fetchingFolder = values[5] as Boolean
+        val prefs = values[4] as ListeningPreferences
+        val initialized = values[5] as Boolean
+        val fetchingFolder = values[6] as Boolean
 
         MainUiState(
             isLoading = !initialized,
@@ -79,6 +85,7 @@ class MainViewModel(
             sectionsByMutunId = sections.groupBy { it.mutunId },
             audios = audios,
             summary = ProgressSummaryCalculator.calculate(surahs, mutun),
+            listeningPrefs = prefs,
             isFetchingFolder = fetchingFolder
         )
     }.stateIn(
@@ -88,10 +95,25 @@ class MainViewModel(
     )
 
     init {
+        playerManager.setAutoAdvancePlaylist(userPreferences.state.value.autoAdvancePlaylist)
         viewModelScope.launch {
             repository.initialize()
             _isInitialized.value = true
         }
+    }
+
+    fun setHafalanRange(minSurah: Int, maxSurah: Int) {
+        userPreferences.setHafalanRange(minSurah, maxSurah)
+        _toastMessage.tryEmit("Target hafalan diperbarui (Surah $minSurah–$maxSurah)")
+    }
+
+    fun setAutoAdvancePlaylist(enabled: Boolean) {
+        userPreferences.setAutoAdvancePlaylist(enabled)
+        playerManager.setAutoAdvancePlaylist(enabled)
+    }
+
+    fun setKeepScreenOnInDrivingMode(enabled: Boolean) {
+        userPreferences.setKeepScreenOnInDrivingMode(enabled)
     }
 
     fun updateSurahProgress(
@@ -360,6 +382,11 @@ class MainViewModel(
                 ?: defaultTitle.trim().takeIf { it.isNotBlank() }
                     ?.let { if (files.size > 1) "$it (${idx + 1})" else it }
                 ?: "Audio Drive #${idx + 1}"
+            val autoSurah = if (targetType == AudioTargetType.QURAN && surahNumber == null) {
+                SurahFilenameMatcher.detectSurahNumber(resolvedTitle)
+            } else {
+                surahNumber
+            }
             DriveAudioEntity(
                 title = resolvedTitle,
                 reciterOrSource = reciterOrSource.trim(),
@@ -367,7 +394,7 @@ class MainViewModel(
                 driveFileId = file.fileId,
                 streamUrl = file.streamUrl,
                 targetType = targetType,
-                surahNumber = if (targetType == AudioTargetType.QURAN) surahNumber else null,
+                surahNumber = if (targetType == AudioTargetType.QURAN) autoSurah else null,
                 mutunId = if (targetType == AudioTargetType.MUTUN) mutunId else null,
                 createdAt = now + idx
             )
@@ -397,6 +424,15 @@ class MainViewModel(
         playerManager.playAudio(audio, playlist)
     }
 
+    fun playQueueFromStart(playlist: List<DriveAudioEntity>, shuffle: Boolean = false) {
+        if (playlist.isEmpty()) {
+            _toastMessage.tryEmit("Belum ada audio di daftar putar ini")
+            return
+        }
+        val queue = if (shuffle) playlist.shuffled() else playlist
+        playerManager.playAudio(queue.first(), queue)
+    }
+
     fun togglePlayPause() = playerManager.togglePlayPause()
     fun seekTo(positionMs: Long) = playerManager.seekTo(positionMs)
     fun seekBy(deltaMs: Long) = playerManager.seekBy(deltaMs)
@@ -410,11 +446,12 @@ class MainViewModel(
 
     class Factory(
         private val repository: HafalanRepository,
-        private val playerManager: AudioPlayerManager
+        private val playerManager: AudioPlayerManager,
+        private val userPreferences: UserPreferences
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return MainViewModel(repository, playerManager) as T
+            return MainViewModel(repository, playerManager, userPreferences) as T
         }
     }
 }

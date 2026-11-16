@@ -398,6 +398,16 @@ fun FullAudioPlayerSheet(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = if (state.autoAdvancePlaylist) {
+                    "Auto-Lanjut Playlist: Aktif"
+                } else {
+                    "Auto-Lanjut Playlist: Nonaktif"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
